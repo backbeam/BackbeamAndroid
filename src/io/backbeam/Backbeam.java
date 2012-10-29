@@ -38,6 +38,10 @@ public class Backbeam {
 		instance().project = project;
 	}
 	
+	public static Query select(String entity) {
+		return new Query(entity);
+	}
+	
 	protected void perform(String method, String path, RequestParams params, final RequestCallback callback) {
 		String url = "http://api."+env+"."+project+"."+host+":"+port+path;
 		System.out.println("url = "+url);
