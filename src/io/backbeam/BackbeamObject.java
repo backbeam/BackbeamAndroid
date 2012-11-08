@@ -148,7 +148,7 @@ public class BackbeamObject {
 	public void save(final ObjectCallback callback) {
 		final RequestParams params = changes;
 		changes = new RequestParams();
-		String path = id == null ? "/"+entity : "/"+entity+"/"+id;
+		String path = id == null ? "/data/"+entity : "/data/"+entity+"/"+id;
 		final String method = id == null ? "POST" : "PUT";
 		
 		final BackbeamObject obj = this;
@@ -156,7 +156,8 @@ public class BackbeamObject {
 			@Override
 			public void success(Json json) {
 				if (method.equals("POST")) {
-					obj.id = json.get("id").asString();
+					Json object = json.get("object");
+					obj.id = object.get("id").asString();
 				}
 				// TODO: update values
 				callback.success(obj);
@@ -171,7 +172,7 @@ public class BackbeamObject {
 	}
 	
 	public void delete(final ObjectCallback callback) {
-		String path = "/"+entity+"/"+id;
+		String path = "/data/"+entity+"/"+id;
 		String method = "DELETE";
 		
 		final BackbeamObject obj = this;
@@ -190,14 +191,14 @@ public class BackbeamObject {
 	}
 	
 	public void read(final ObjectCallback callback) {
-		String path = "/"+entity+"/"+id;
+		String path = "/data/"+entity+"/"+id;
 		String method = "GET";
 		
 		final BackbeamObject obj = this;
 		Backbeam.instance().perform(method, path, null, new RequestCallback() {
 			@Override
 			public void success(Json json) {
-				
+				// TODO
 				callback.success(obj);
 			}
 			

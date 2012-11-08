@@ -30,7 +30,7 @@ public class Query {
 		}
 		prms.put("limit", Integer.toString(limit));
 		prms.put("offset", Integer.toString(offset));
-		Backbeam.instance().perform("GET", "/"+entity, prms, new RequestCallback() {
+		Backbeam.instance().perform("GET", "/data/"+entity, prms, new RequestCallback() {
 			@Override
 			public void success(Json response) {
 		        Json objs = response.get("objects");
