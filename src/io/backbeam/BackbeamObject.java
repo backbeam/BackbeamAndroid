@@ -1,5 +1,6 @@
 package io.backbeam;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Hashtable;
@@ -8,15 +9,17 @@ import java.util.Map;
 
 import com.loopj.android.http.RequestParams;
 
-public class BackbeamObject {
+public class BackbeamObject implements Serializable {
 
+	private static final long serialVersionUID = 8296458723947296629L;
+	
 	private String entity;
 	private String id;
 	private Date createdAt;
 	private Date updatedAt;
 	private Hashtable<String, Object> fields;
 	
-	private RequestParams changes = new RequestParams();
+	private transient RequestParams changes;
 	
 	public BackbeamObject(String entity) {
 		this.entity = entity;

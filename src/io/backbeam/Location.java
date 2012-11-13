@@ -1,6 +1,10 @@
 package io.backbeam;
 
-public class Location {
+import java.io.Serializable;
+
+public class Location implements Serializable {
+	
+	private static final long serialVersionUID = -1857479454606070940L;
 	
 	private double lat;
 	private double lon;

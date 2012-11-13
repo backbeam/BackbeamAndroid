@@ -1,11 +1,22 @@
 package io.backbeam;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+
+import android.content.Context;
+
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
 
 public class Backbeam {
 	
+	private static final String USER_FILE = "backbeam_current_user";
+	
+	private Context context;
 	private String host = "backbeam.io";
 	private int port = 80;
 	private String env  = "pro";
@@ -70,6 +81,37 @@ public class Backbeam {
 
 	protected static void setCurrentUser(BackbeamObject obj) {
 		instance().currentUser = obj;
+		if (obj != null) {
+			try {
+				FileOutputStream fos = instance().context.openFileOutput(USER_FILE, Context.MODE_PRIVATE);
+				ObjectOutputStream oos = new ObjectOutputStream(fos);
+				oos.writeObject(obj);
+				fos.close();
+				System.out.println("Object saved");
+			} catch(Exception e) {
+				throw new BackbeamException(e);
+			}
+		} else {
+			instance().context.deleteFile(USER_FILE);
+		}
+	}
+	
+	public static void setContext(Context context) {
+		instance().context = context;
+		if (context != null && instance().currentUser == null) {
+			try {
+				FileInputStream fis = instance().context.openFileInput(USER_FILE);
+				ObjectInputStream ois = new ObjectInputStream(fis);
+				BackbeamObject object = (BackbeamObject) ois.readObject();
+				instance().currentUser = object;
+				fis.close();
+			} catch(FileNotFoundException e) {
+				// no user stored
+			} catch(Exception e) {
+				// ignore? log?
+				// throw new BackbeamException(e);
+			}
+		}
 	}
 	
 	public static void login(String email, String password, final ObjectCallback callback) {
