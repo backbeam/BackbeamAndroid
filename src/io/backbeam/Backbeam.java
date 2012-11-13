@@ -74,8 +74,8 @@ public class Backbeam {
 	
 	public static void login(String email, String password, final ObjectCallback callback) {
 		RequestParams params = new RequestParams();
-		params.put("email", email);
-		params.put("password", password);
+		params.add("email", email);
+		params.add("password", password);
 		instance().perform("POST", "/user/email/login", params, new RequestCallback() {
 			public void success(Json json) {
 				if (!json.isMap()) {
@@ -104,7 +104,7 @@ public class Backbeam {
 	
 	public static void requestPasswordReset(String email, final OperationCallback callback) {
 		RequestParams params = new RequestParams();
-		params.put("email", email);
+		params.add("email", email);
 		instance().perform("POST", "/user/email/lostpassword", params, new RequestCallback() {
 			public void success(Json json) {
 				if (!json.isMap()) {

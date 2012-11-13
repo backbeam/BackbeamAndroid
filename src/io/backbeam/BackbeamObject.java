@@ -102,7 +102,7 @@ public class BackbeamObject {
 	
 	public void setDate(String field, Date date) {
 		fields.put(field, date);
-		changes.put(field, ""+date.getTime());
+		changes.add(field, ""+date.getTime());
 	}
 	
 	public String getString(String field) {
@@ -113,7 +113,7 @@ public class BackbeamObject {
 	
 	public void setString(String field, String value) {
 		fields.put(field, value);
-		changes.put(field, value);
+		changes.add(field, value);
 	}
 	
 	public BackbeamObject getObject(String field) {
@@ -124,17 +124,17 @@ public class BackbeamObject {
 	
 	public void setObject(String field, BackbeamObject object) {
 		fields.put(field, object);
-		changes.put(field, object.getId());
+		changes.add(field, object.getId());
 	}
 	
 	public void addObject(String field, BackbeamObject object) {
 		// TODO: added list?
-		changes.put("_add-"+field, object.getId());
+		changes.add("_add-"+field, object.getId());
 	}
 	
 	public void removeObject(String field, BackbeamObject object) {
 		// TODO: removed list?
-		changes.put("_rem-"+field, object.getId());
+		changes.add("_rem-"+field, object.getId());
 	}
 	
 	public JoinResult getJoinResult(String field) {
@@ -155,7 +155,7 @@ public class BackbeamObject {
 		if (location.getAddress() != null) {
 			value += location.getAddress();
 		}
-		changes.put(field, value);
+		changes.add(field, value);
 	}
 	
 	public void save(final ObjectCallback callback) {

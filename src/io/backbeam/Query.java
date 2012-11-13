@@ -11,27 +11,29 @@ public class Query {
 	
 	private String entity;
 	private String query;
-	private Object[] params;
+	private String[] params;
 	
 	public Query(String entity) {
 		this.entity = entity;
 	}
 	
-	public Query setQuery(String query, Object... params) {
+	public Query setQuery(String query, String... params) {
 		this.query = query;
-		this.params = params;
+		this.params = params; // TODO convert objects, such as dates, etc.
 		return this;
 	}
 	
 	public void fetch(int limit, int offset, final FetchCallback callback) {
 		RequestParams prms = new RequestParams();
 		if (query != null) {
-			prms.put("q", query);
+			prms.add("q", query);
 		}
-		prms.put("limit", Integer.toString(limit));
-		prms.put("offset", Integer.toString(offset));
-		if (params != null && params.length > 0) {
-			prms.put("params", (String)params[0]);
+		prms.add("limit", Integer.toString(limit));
+		prms.add("offset", Integer.toString(offset));
+		if (params != null) {
+			for (int i = 0; i < params.length; i++) {
+				prms.add("params", params[i]);
+			}
 		}
 		Backbeam.instance().perform("GET", "/data/"+entity, prms, new RequestCallback() {
 			@Override
