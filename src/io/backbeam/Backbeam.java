@@ -13,6 +13,8 @@ public class Backbeam {
 	private String twitterConsumerKey;
 	private String twitterConsumerSecret;
 	
+	private BackbeamObject currentUser;
+	
 	private static Backbeam instance;
 	
 	private Backbeam() {
@@ -38,8 +40,93 @@ public class Backbeam {
 		instance().project = project;
 	}
 	
+	public static void setEnvironment(String environment) {
+		instance().env = environment;
+	}
+	
 	public static Query select(String entity) {
 		return new Query(entity);
+	}
+	
+	public static void subscribeToChannels(String... channels) {
+		
+	}
+	
+	public static void subscribeToChannels(OperationCallback callback, String... channels) {
+		
+	}
+	
+	public static void sendPushNotificationToChannel(PushNotification notification, String channel, OperationCallback callback) {
+		
+	}
+	
+	public static void logout() {
+		setCurrentUser(null);
+	}
+	
+	public static BackbeamObject currentUser() {
+		return instance().currentUser;
+	}
+
+	protected static void setCurrentUser(BackbeamObject obj) {
+		instance().currentUser = obj;
+	}
+	
+	public static void login(String email, String password, final ObjectCallback callback) {
+		RequestParams params = new RequestParams();
+		params.put("email", email);
+		params.put("password", password);
+		instance().perform("POST", "/user/email/login", params, new RequestCallback() {
+			public void success(Json json) {
+				if (!json.isMap()) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				String status = json.get("status").asString();
+				if (status == null) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				BackbeamObject object = null;
+				Json obj = json.get("object");
+				if (obj != null) {
+					object = new BackbeamObject("user", obj, null, null);
+					setCurrentUser(object);
+				}
+				callback.success(object);
+			}
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
+	}
+	
+	public static void requestPasswordReset(String email, final OperationCallback callback) {
+		RequestParams params = new RequestParams();
+		params.put("email", email);
+		instance().perform("POST", "/user/email/lostpassword", params, new RequestCallback() {
+			public void success(Json json) {
+				if (!json.isMap()) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				String status = json.get("status").asString();
+				if (status == null) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				if (!status.equals("Success")) {
+					callback.failure(new BackbeamException(status));
+					return;
+				}
+				callback.success();
+			}
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
 	}
 	
 	protected void perform(String method, String path, RequestParams params, final RequestCallback callback) {

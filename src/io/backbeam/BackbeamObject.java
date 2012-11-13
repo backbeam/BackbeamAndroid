@@ -21,11 +21,24 @@ public class BackbeamObject {
 	public BackbeamObject(String entity) {
 		this.entity = entity;
 		this.fields = new Hashtable<String, Object>();
+		changes = new RequestParams();
+	}
+
+	public BackbeamObject(String entity, String id) {
+		this.entity = entity;
+		this.fields = new Hashtable<String, Object>();
+		this.id = id;
+		changes = new RequestParams();
 	}
 	
 	public BackbeamObject(String entity, Json obj, Map<String, BackbeamObject> references, String id) {
 		this(entity);
 		this.id = id;
+		fillValues(obj, references);
+	}
+	
+	private void fillValues(Json obj, Map<String, BackbeamObject> references) {
+		changes = new RequestParams();
 		for (String key : obj.keys()) {
 			if (key.equals("id")) {
 				this.id = obj.get(key).asString();
@@ -147,31 +160,41 @@ public class BackbeamObject {
 	
 	public void save(final ObjectCallback callback) {
 		final RequestParams params = changes;
-		changes = new RequestParams();
 		String path = id == null ? "/data/"+entity : "/data/"+entity+"/"+id;
 		final String method = id == null ? "POST" : "PUT";
 		
 		final BackbeamObject obj = this;
 		Backbeam.instance().perform(method, path, params, new RequestCallback() {
-			@Override
 			public void success(Json json) {
-				if (method.equals("POST")) {
-					Json object = json.get("object");
-					obj.id = object.get("id").asString();
+				if (!json.isMap()) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
 				}
-				// TODO: update values
+				String status = json.get("status").asString();
+				Json object = json.get("object");
+				if (status == null || object == null) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				fillValues(object, null);
+				if (entity.equals("user")) {
+					fields.remove("password");
+				}
+				if (entity.equals("user") && method.equals("POST")) {
+					Backbeam.logout();
+					if (status.equals("Success")) {
+						Backbeam.setCurrentUser(obj);
+					}
+				}
 				callback.success(obj);
 			}
-			
-			@Override
 			public void failure(BackbeamException exception) {
-				// TODO: add changes to current "changes" ?
 				callback.failure(exception);
 			}
 		});
 	}
 	
-	public void delete(final ObjectCallback callback) {
+	public void remove(final ObjectCallback callback) {
 		String path = "/data/"+entity+"/"+id;
 		String method = "DELETE";
 		
@@ -179,7 +202,17 @@ public class BackbeamObject {
 		Backbeam.instance().perform(method, path, null, new RequestCallback() {
 			@Override
 			public void success(Json json) {
-				// TODO: update values
+				if (!json.isMap()) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				String status = json.get("status").asString();
+				Json object = json.get("object");
+				if (status == null || object == null) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				fillValues(object, null);
 				callback.success(obj);
 			}
 			
@@ -190,19 +223,26 @@ public class BackbeamObject {
 		});
 	}
 	
-	public void read(final ObjectCallback callback) {
+	public void refresh(final ObjectCallback callback) {
 		String path = "/data/"+entity+"/"+id;
 		String method = "GET";
 		
 		final BackbeamObject obj = this;
 		Backbeam.instance().perform(method, path, null, new RequestCallback() {
-			@Override
 			public void success(Json json) {
-				// TODO
+				if (!json.isMap()) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				String status = json.get("status").asString();
+				Json object = json.get("object");
+				if (status == null || object == null) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				fillValues(object, null);
 				callback.success(obj);
 			}
-			
-			@Override
 			public void failure(BackbeamException exception) {
 				callback.failure(exception);
 			}

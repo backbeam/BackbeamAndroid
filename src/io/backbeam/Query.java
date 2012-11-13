@@ -30,6 +30,9 @@ public class Query {
 		}
 		prms.put("limit", Integer.toString(limit));
 		prms.put("offset", Integer.toString(offset));
+		if (params != null && params.length > 0) {
+			prms.put("params", (String)params[0]);
+		}
 		Backbeam.instance().perform("GET", "/data/"+entity, prms, new RequestCallback() {
 			@Override
 			public void success(Json response) {
@@ -51,6 +54,11 @@ public class Query {
 		        }
 		        
 		        callback.success(objects);
+			}
+			
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
 			}
 		});
 	}

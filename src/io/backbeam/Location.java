@@ -17,6 +17,21 @@ public class Location {
 		this.alt = alt;
 		this.address = address;
 	}
+	
+	public Location(double lat, double lon, String address) {
+		this.lat = lat;
+		this.lon = lon;
+		this.address = address;
+	}
+	
+	public Location(double lat, double lon) {
+		this.lat = lat;
+		this.lon = lon;
+	}
+	
+	public Location(String address) {
+		this.address = address;
+	}
 
 	public double getLatitude() {
 		return lat;

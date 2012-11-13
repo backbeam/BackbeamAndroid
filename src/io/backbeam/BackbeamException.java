@@ -1,6 +1,6 @@
 package io.backbeam;
 
-public class BackbeamException extends Exception {
+public class BackbeamException extends RuntimeException {
 
 	private static final long serialVersionUID = 193488235052779390L;
 	
