@@ -105,7 +105,7 @@ public class BackbeamObject implements Serializable {
 	
 	public void setDate(String field, Date date) {
 		fields.put(field, date);
-		changes.add(field, ""+date.getTime());
+		changes.add("set-"+field, ""+date.getTime());
 	}
 	
 	public String getString(String field) {
@@ -116,7 +116,7 @@ public class BackbeamObject implements Serializable {
 	
 	public void setString(String field, String value) {
 		fields.put(field, value);
-		changes.add(field, value);
+		changes.add("set-"+field, value);
 	}
 	
 	public BackbeamObject getObject(String field) {
@@ -127,17 +127,17 @@ public class BackbeamObject implements Serializable {
 	
 	public void setObject(String field, BackbeamObject object) {
 		fields.put(field, object);
-		changes.add(field, object.getId());
+		changes.add("set-"+field, object.getId());
 	}
 	
 	public void addObject(String field, BackbeamObject object) {
 		// TODO: added list?
-		changes.add("_add-"+field, object.getId());
+		changes.add("add-"+field, object.getId());
 	}
 	
 	public void removeObject(String field, BackbeamObject object) {
 		// TODO: removed list?
-		changes.add("_rem-"+field, object.getId());
+		changes.add("rem-"+field, object.getId());
 	}
 	
 	public JoinResult getJoinResult(String field) {
@@ -158,7 +158,7 @@ public class BackbeamObject implements Serializable {
 		if (location.getAddress() != null) {
 			value += location.getAddress();
 		}
-		changes.add(field, value);
+		changes.add("set-"+field, value);
 	}
 	
 	public void save(final ObjectCallback callback) {
