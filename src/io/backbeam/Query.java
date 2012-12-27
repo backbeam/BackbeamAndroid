@@ -1,11 +1,12 @@
 package io.backbeam;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import com.loopj.android.http.RequestParams;
+import java.util.TreeMap;
 
 public class Query {
 	
@@ -23,17 +24,40 @@ public class Query {
 		return this;
 	}
 	
-	public void fetch(int limit, int offset, final FetchCallback callback) {
-		RequestParams prms = new RequestParams();
-		if (query != null) {
-			prms.add("q", query);
-		}
-		prms.add("limit", Integer.toString(limit));
-		prms.add("offset", Integer.toString(offset));
-		if (params != null) {
-			for (int i = 0; i < params.length; i++) {
-				prms.add("params", params[i]);
+	private String stringFromObject(Object obj, boolean addEntity) {
+		if (obj instanceof String) {
+			return (String) obj;
+		} else if (obj instanceof BackbeamObject) {
+			BackbeamObject o = (BackbeamObject) obj;
+			if (addEntity) {
+				return o.getEntity()+"/"+o.getId();
+			} else {
+				return o.getId();
 			}
+		} else if (obj instanceof Date) {
+			return ""+((Date) obj).getTime();
+		} else if (obj instanceof Location) {
+			Location location = (Location) obj;
+			String s = location.getLatitude()+","+location.getLongitude()+","+location.getAltitude()+"|";
+			if (location.getAddress() != null) s += location.getAddress();
+			return s;
+		}
+		return null;
+	}
+	
+	public void fetch(int limit, int offset, final FetchCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		if (query != null) {
+			prms.put("q", query);
+		}
+		prms.put("limit", Integer.toString(limit));
+		prms.put("offset", Integer.toString(offset));
+		if (params != null) {
+			List<String> list = new ArrayList<String>();
+			for (Object obj : params) {
+				list.add(stringFromObject(obj, true));
+			}
+			prms.put("params", list);
 		}
 		Backbeam.instance().perform("GET", "/data/"+entity, prms, new RequestCallback() {
 			@Override

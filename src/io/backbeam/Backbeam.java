@@ -8,12 +8,21 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.UUID;
 
-import android.app.Activity;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.util.Base64;
 
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
@@ -29,6 +38,8 @@ public class Backbeam {
 	private int port = 80;
 	private String env  = "pro";
 	private String project;
+	private String sharedKey;
+	private String secretKey;
 	private String twitterConsumerKey;
 	private String twitterConsumerSecret;
 	private IntentCallback pushHandler;
@@ -63,6 +74,14 @@ public class Backbeam {
 	
 	public static void setEnvironment(String environment) {
 		instance().env = environment;
+	}
+	
+	public static void setSecretKey(String key) {
+		instance().secretKey = key;
+	}
+	
+	public static void setSharedKey(String key) {
+		instance().sharedKey = key;
 	}
 	
 	public static Query select(String entity) {
@@ -128,9 +147,9 @@ public class Backbeam {
 	}
 	
 	public static void login(String email, String password, final ObjectCallback callback) {
-		RequestParams params = new RequestParams();
-		params.add("email", email);
-		params.add("password", password);
+		TreeMap<String, Object> params = new TreeMap<String, Object>();
+		params.put("email", email);
+		params.put("password", password);
 		instance().perform("POST", "/user/email/login", params, new RequestCallback() {
 			public void success(Json json) {
 				if (!json.isMap()) {
@@ -158,8 +177,8 @@ public class Backbeam {
 	}
 	
 	public static void requestPasswordReset(String email, final OperationCallback callback) {
-		RequestParams params = new RequestParams();
-		params.add("email", email);
+		TreeMap<String, Object> params = new TreeMap<String, Object>();
+		params.put("email", email);
 		instance().perform("POST", "/user/email/lostpassword", params, new RequestCallback() {
 			public void success(Json json) {
 				if (!json.isMap()) {
@@ -184,8 +203,50 @@ public class Backbeam {
 		});
 	}
 	
-	protected void perform(String method, String path, RequestParams params, final RequestCallback callback) {
+	private String hmacSha1(String key, String message) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA1");
+            SecretKeySpec secret = new SecretKeySpec(key.getBytes("UTF-8"), mac.getAlgorithm());
+            mac.init(secret);
+            byte[] digest = mac.doFinal(message.getBytes("UTF-8"));
+            return Base64.encodeToString(digest, Base64.NO_WRAP);
+        } catch (Exception e) {
+            throw new BackbeamException(e);
+        }
+	}
+	
+	private RequestParams sign(TreeMap<String, Object> params) {
+		if (params == null) params = new TreeMap<String, Object>();
+		params.put("key", this.sharedKey);
+		params.put("time", new Date().getTime()+"");
+		params.put("nonce", UUID.randomUUID().toString());
+		
+		RequestParams reqParams = new RequestParams();
+		StringBuilder base = new StringBuilder();
+		for (String key : params.keySet()) {
+			Object value = params.get(key);
+			if (value instanceof List<?>) {
+				@SuppressWarnings("unchecked")
+				List<String> list = (List<String>) value;
+				Collections.sort(list);
+				for (String string : list) {
+					base.append("&"+key+"="+string);
+					reqParams.add(key, string);
+				}
+			} else {
+				if (value == null) System.out.println("value null "+key);
+				base.append("&"+key+"="+value);
+				reqParams.add(key, value.toString());
+			}
+		}
+		
+		reqParams.add("signature", hmacSha1(this.secretKey, base.substring(1)));
+		return reqParams;
+	}
+	
+	protected void perform(String method, String path, TreeMap<String, Object> prms, final RequestCallback callback) {
 		String url = "http://api."+env+"."+project+"."+host+":"+port+path;
+		RequestParams params = sign(prms);
 		// System.out.println("url = "+url);
 		AsyncHttpClient client = new AsyncHttpClient();
 		AsyncHttpResponseHandler handler = new AsyncHttpResponseHandler() {
@@ -264,12 +325,10 @@ public class Backbeam {
 		String registrationId = instance().registrationId;
 		if (registrationId == null) return false;
 		
-		RequestParams params = new RequestParams();
-		params.add("gateway", "gcm");
-		params.add("token", registrationId);
-		for (String channel : channels) {
-			params.add("channels", channel);
-		}
+		TreeMap<String, Object> params = new TreeMap<String, Object>();
+		params.put("gateway", "gcm");
+		params.put("token", registrationId);
+		params.put("channels", Arrays.asList(channels));
 		instance().perform("POST", path, params, new RequestCallback() {
 			public void success(Json json) {
 				if (!json.isMap()) {
@@ -304,37 +363,37 @@ public class Backbeam {
 	}
 	
 	public static void sendPushNotificationToChannel(PushNotification notification, String channel, final OperationCallback callback) {
-		RequestParams params = new RequestParams();
-		params.add("channel", channel);
+		TreeMap<String, Object> params = new TreeMap<String, Object>();
+		params.put("channel", channel);
 		
 		// for iOS
 		if (notification.getIosBadge() != null) {
-			params.add("apn_badge", notification.getIosBadge().toString());
+			params.put("apn_badge", notification.getIosBadge().toString());
 		}
 		if (notification.getIosAlert() != null) {
-			params.add("apn_alert", notification.getIosAlert());
+			params.put("apn_alert", notification.getIosAlert());
 		}
 		if (notification.getIosSound() != null) {
-			params.add("apn_sound", notification.getIosSound());
+			params.put("apn_sound", notification.getIosSound());
 		}
 		if (notification.getIosPayload() != null) {
 			for (Map.Entry<String, String> entry : notification.getIosPayload().entrySet()) {
-				params.add("apn_payload_"+entry.getKey(), entry.getValue());
+				params.put("apn_payload_"+entry.getKey(), entry.getValue());
 			}
 		}
 		// for Android
 		if (notification.getAndroidDelayWhileIdle() != null) {
-			params.add("gcm_delay_while_idle", notification.getAndroidDelayWhileIdle().toString());
+			params.put("gcm_delay_while_idle", notification.getAndroidDelayWhileIdle().toString());
 		}
 		if (notification.getAndroidCollapseKey() != null) {
-			params.add("gcm_collapse_key", notification.getAndroidCollapseKey());
+			params.put("gcm_collapse_key", notification.getAndroidCollapseKey());
 		}
 		if (notification.getAndroidTimeToLive() != null) {
-			params.add("gcm_time_to_live", notification.getAndroidTimeToLive().toString());
+			params.put("gcm_time_to_live", notification.getAndroidTimeToLive().toString());
 		}
 		if (notification.getAndroidData() != null) {
 			for (Map.Entry<String, String> entry : notification.getAndroidData().entrySet()) {
-				params.add("gcm_data_"+entry.getKey(), entry.getValue());
+				params.put("gcm_data_"+entry.getKey(), entry.getValue());
 			}
 		}
 		

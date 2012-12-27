@@ -6,8 +6,7 @@ import java.util.Date;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
-
-import com.loopj.android.http.RequestParams;
+import java.util.TreeMap;
 
 public class BackbeamObject implements Serializable {
 
@@ -19,19 +18,19 @@ public class BackbeamObject implements Serializable {
 	private Date updatedAt;
 	private Hashtable<String, Object> fields;
 	
-	private transient RequestParams changes;
+	private transient TreeMap<String, Object> changes;
 	
 	public BackbeamObject(String entity) {
 		this.entity = entity;
 		this.fields = new Hashtable<String, Object>();
-		changes = new RequestParams();
+		changes = new TreeMap<String, Object>();
 	}
 
 	public BackbeamObject(String entity, String id) {
 		this.entity = entity;
 		this.fields = new Hashtable<String, Object>();
 		this.id = id;
-		changes = new RequestParams();
+		changes = new TreeMap<String, Object>();
 	}
 	
 	public BackbeamObject(String entity, Json obj, Map<String, BackbeamObject> references, String id) {
@@ -41,7 +40,7 @@ public class BackbeamObject implements Serializable {
 	}
 	
 	private void fillValues(Json obj, Map<String, BackbeamObject> references) {
-		changes = new RequestParams();
+		changes = new TreeMap<String, Object>();
 		for (String key : obj.keys()) {
 			if (key.equals("id")) {
 				this.id = obj.get(key).asString();
@@ -105,7 +104,7 @@ public class BackbeamObject implements Serializable {
 	
 	public void setDate(String field, Date date) {
 		fields.put(field, date);
-		changes.add("set-"+field, ""+date.getTime());
+		changes.put("set-"+field, ""+date.getTime());
 	}
 	
 	public String getString(String field) {
@@ -116,7 +115,7 @@ public class BackbeamObject implements Serializable {
 	
 	public void setString(String field, String value) {
 		fields.put(field, value);
-		changes.add("set-"+field, value);
+		changes.put("set-"+field, value);
 	}
 	
 	public BackbeamObject getObject(String field) {
@@ -127,17 +126,29 @@ public class BackbeamObject implements Serializable {
 	
 	public void setObject(String field, BackbeamObject object) {
 		fields.put(field, object);
-		changes.add("set-"+field, object.getId());
+		changes.put("set-"+field, object.getId());
 	}
 	
 	public void addObject(String field, BackbeamObject object) {
-		// TODO: added list?
-		changes.add("add-"+field, object.getId());
+		String key = "add-"+field;
+		@SuppressWarnings("unchecked")
+		List<String> values = (List<String>) changes.get(key);
+		if (values == null) {
+			values = new ArrayList<String>();
+			changes.put(key, values);
+		}
+		values.add(object.getId());
 	}
 	
 	public void removeObject(String field, BackbeamObject object) {
-		// TODO: removed list?
-		changes.add("rem-"+field, object.getId());
+		String key = "rem-"+field;
+		@SuppressWarnings("unchecked")
+		List<String> values = (List<String>) changes.get(key);
+		if (values == null) {
+			values = new ArrayList<String>();
+			changes.put(key, values);
+		}
+		values.add(object.getId());
 	}
 	
 	public JoinResult getJoinResult(String field) {
@@ -158,17 +169,17 @@ public class BackbeamObject implements Serializable {
 		if (location.getAddress() != null) {
 			value += location.getAddress();
 		}
-		changes.add("set-"+field, value);
+		changes.put("set-"+field, value);
 	}
 	
 	public void save(final ObjectCallback callback) {
-		final RequestParams params = changes;
 		String path = id == null ? "/data/"+entity : "/data/"+entity+"/"+id;
 		final String method = id == null ? "POST" : "PUT";
 		
 		final BackbeamObject obj = this;
-		Backbeam.instance().perform(method, path, params, new RequestCallback() {
+		Backbeam.instance().perform(method, path, changes, new RequestCallback() {
 			public void success(Json json) {
+				obj.changes = new TreeMap<String, Object>();
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
