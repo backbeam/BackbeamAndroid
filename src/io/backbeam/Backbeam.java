@@ -11,6 +11,7 @@ import java.io.ObjectOutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -157,14 +158,15 @@ public class Backbeam {
 					return;
 				}
 				String status = json.get("status").asString();
+				Json values = json.get("objects");
 				if (status == null) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
 				}
-				BackbeamObject object = null;
-				Json obj = json.get("object");
-				if (obj != null) {
-					object = new BackbeamObject("user", obj, null, null);
+				String id = json.get("id").asString();
+				Map<String, BackbeamObject> objects = BackbeamObject.objectsFromValues(values, null);
+				BackbeamObject object = objects.get(id);
+				if (object != null) {
 					setCurrentUser(object);
 				}
 				callback.success(object);

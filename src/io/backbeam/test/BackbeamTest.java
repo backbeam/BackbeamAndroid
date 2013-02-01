@@ -16,8 +16,8 @@ public class BackbeamTest extends Test {
 	public void configure() {
 		before(new TestBlock() {
 			public void run(DoneBlock done) {
-				Backbeam.setHost("backbeam.dev");
-				Backbeam.setPort(8080);
+				Backbeam.setHost("backbeamapps.dev");
+				Backbeam.setPort(8079);
 				Backbeam.setProject("callezeta");
 				Backbeam.setEnvironment("dev");
 				done.done();

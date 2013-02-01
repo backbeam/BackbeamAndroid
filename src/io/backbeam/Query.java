@@ -1,9 +1,7 @@
 package io.backbeam;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -62,24 +60,16 @@ public class Query {
 		Backbeam.instance().perform("GET", "/data/"+entity, prms, new RequestCallback() {
 			@Override
 			public void success(Json response) {
-		        Json objs = response.get("objects");
-		        Json refs = response.get("references");
+		        Json values = response.get("objects");
+		        Json ids    = response.get("ids");
 		        
-		        Map<String, BackbeamObject> references = new HashMap<String, BackbeamObject>(refs.size());
-		        for (String id : refs.keys()) {
-		        	Json obj = refs.get(id);
-		        	BackbeamObject object = new BackbeamObject(entity, obj, null, id);
-		        	object.setEntity(obj.get("type").asString());
-		        	references.put(id, object);
+		        Map<String, BackbeamObject> objects = BackbeamObject.objectsFromValues(values, null);
+		        List<BackbeamObject> list = new ArrayList<BackbeamObject>(ids.size());
+		        for (Json id : ids) {
+		        	BackbeamObject obj = objects.get(id.asString());
+		        	list.add(obj);
 		        }
-		        
-		        List<BackbeamObject> objects = new ArrayList<BackbeamObject>(objs.size());
-		        for (Json obj : objs) {
-		        	BackbeamObject object = new BackbeamObject(entity, obj, references, null);
-		        	objects.add(object);
-		        }
-		        
-		        callback.success(objects);
+		        callback.success(list);
 			}
 			
 			@Override

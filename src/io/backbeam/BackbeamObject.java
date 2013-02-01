@@ -3,6 +3,7 @@ package io.backbeam;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,24 @@ public class BackbeamObject implements Serializable {
 		this(entity);
 		this.id = id;
 		fillValues(obj, references);
+	}
+	
+	public static Map<String, BackbeamObject> objectsFromValues(Json values, Map<String, BackbeamObject> objects) {
+		if (objects == null) {
+			objects = new HashMap<String, BackbeamObject>();
+		}
+		for (String id : values.keys()) {
+			BackbeamObject obj = objects.get(id);
+			if (obj != null) continue;
+			String type = values.get(id).get("type").asString();
+			objects.put(id, new BackbeamObject(type, id));
+		}
+		for (String id : values.keys()) {
+			BackbeamObject obj = objects.get(id);
+			Json value = values.get(id);
+			obj.fillValues(value, objects);
+		}
+		return objects;
 	}
 	
 	private void fillValues(Json obj, Map<String, BackbeamObject> references) {
@@ -185,12 +204,16 @@ public class BackbeamObject implements Serializable {
 					return;
 				}
 				String status = json.get("status").asString();
-				Json object = json.get("object");
-				if (status == null || object == null) {
+				Json values   = json.get("objects");
+				String id     = json.get("id").asString();
+				if (status == null || values == null || id == null) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
 				}
-				fillValues(object, null);
+				obj.id = id;
+				Map<String, BackbeamObject> objects = new HashMap<String, BackbeamObject>();
+				objects.put(id, obj);
+				BackbeamObject.objectsFromValues(values, objects);
 				if (entity.equals("user")) {
 					fields.remove("password");
 				}
@@ -221,12 +244,14 @@ public class BackbeamObject implements Serializable {
 					return;
 				}
 				String status = json.get("status").asString();
-				Json object = json.get("object");
-				if (status == null || object == null) {
+				Json values   = json.get("objects");
+				if (status == null || values == null) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
 				}
-				fillValues(object, null);
+				Map<String, BackbeamObject> objects = new HashMap<String, BackbeamObject>();
+				objects.put(id, obj);
+				BackbeamObject.objectsFromValues(values, objects);
 				callback.success(obj);
 			}
 			
@@ -249,12 +274,14 @@ public class BackbeamObject implements Serializable {
 					return;
 				}
 				String status = json.get("status").asString();
-				Json object = json.get("object");
-				if (status == null || object == null) {
+				Json values   = json.get("objects");
+				if (status == null || values == null) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
 				}
-				fillValues(object, null);
+				Map<String, BackbeamObject> objects = new HashMap<String, BackbeamObject>();
+				objects.put(id, obj);
+				BackbeamObject.objectsFromValues(values, objects);
 				callback.success(obj);
 			}
 			public void failure(BackbeamException exception) {
