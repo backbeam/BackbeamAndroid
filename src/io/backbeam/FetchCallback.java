@@ -4,6 +4,6 @@ import java.util.List;
 
 public abstract class FetchCallback extends Callback {
 	
-	public abstract void success(List<BackbeamObject> objects);
+	public abstract void success(List<BackbeamObject> objects, int totalCount, boolean fromCache);
 
 }

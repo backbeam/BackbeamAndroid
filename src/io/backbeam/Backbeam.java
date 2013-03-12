@@ -2,29 +2,28 @@ package io.backbeam;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.util.Base64;
 
+import com.jakewharton.DiskLruCache;
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
@@ -35,9 +34,9 @@ public class Backbeam {
 	private static final String REGISTRATION_ID_FILE = "backbeam_registration_id";
 	
 	private Context context;
-	private String host = "backbeam.io";
+	private String host = "backbeamapps.com";
 	private int port = 80;
-	private String env  = "pro";
+	private String env = "pro";
 	private String project;
 	private String sharedKey;
 	private String secretKey;
@@ -45,13 +44,13 @@ public class Backbeam {
 	private String twitterConsumerSecret;
 	private IntentCallback pushHandler;
 	private String registrationId;
+	private DiskLruCache diskCache;
 	
 	private BackbeamObject currentUser;
 	
 	private static Backbeam instance;
 	
 	private Backbeam() {
-		
 	}
 	
 	protected static Backbeam instance() {
@@ -113,9 +112,25 @@ public class Backbeam {
 		}
 	}
 	
+	public static void close() {
+		try {
+			instance().diskCache.close();
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+	}
+	
 	public static void setContext(Context context) {
 		instance().context = context;
 		if (context != null) {
+			try {
+				File cacheDir = context.getCacheDir();
+				instance().diskCache = DiskLruCache.open(cacheDir, 1, 1, 1024*1024);
+			} catch (IOException ex) {
+				// TODO: handle error
+				ex.printStackTrace();
+			}
+			
 			if (instance().currentUser == null) {
 				try {
 					FileInputStream fis = instance().context.openFileInput(USER_FILE);
@@ -151,8 +166,8 @@ public class Backbeam {
 		TreeMap<String, Object> params = new TreeMap<String, Object>();
 		params.put("email", email);
 		params.put("password", password);
-		instance().perform("POST", "/user/email/login", params, new RequestCallback() {
-			public void success(Json json) {
+		instance().perform("POST", "/user/email/login", params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
@@ -181,8 +196,8 @@ public class Backbeam {
 	public static void requestPasswordReset(String email, final OperationCallback callback) {
 		TreeMap<String, Object> params = new TreeMap<String, Object>();
 		params.put("email", email);
-		instance().perform("POST", "/user/email/lostpassword", params, new RequestCallback() {
-			public void success(Json json) {
+		instance().perform("POST", "/user/email/lostpassword", params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
@@ -205,26 +220,17 @@ public class Backbeam {
 		});
 	}
 	
-	private String hmacSha1(String key, String message) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA1");
-            SecretKeySpec secret = new SecretKeySpec(key.getBytes("UTF-8"), mac.getAlgorithm());
-            mac.init(secret);
-            byte[] digest = mac.doFinal(message.getBytes("UTF-8"));
-            return Base64.encodeToString(digest, Base64.NO_WRAP);
-        } catch (Exception e) {
-            throw new BackbeamException(e);
-        }
-	}
-	
-	private RequestParams sign(TreeMap<String, Object> params) {
+	protected void perform(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final RequestCallback callback) {
+		String url = "http://api."+env+"."+project+"."+host+":"+port+path;
+		
 		if (params == null) params = new TreeMap<String, Object>();
 		params.put("key", this.sharedKey);
 		params.put("time", new Date().getTime()+"");
 		params.put("nonce", UUID.randomUUID().toString());
 		
 		RequestParams reqParams = new RequestParams();
-		StringBuilder base = new StringBuilder();
+		StringBuilder parameterString = new StringBuilder();
+		StringBuilder cacheKeyString = new StringBuilder();
 		for (String key : params.keySet()) {
 			Object value = params.get(key);
 			if (value instanceof List<?>) {
@@ -232,30 +238,80 @@ public class Backbeam {
 				List<String> list = (List<String>) value;
 				Collections.sort(list);
 				for (String string : list) {
-					base.append("&"+key+"="+string);
-					reqParams.add(key, string);
+					parameterString.append("&"+key+"="+string);
+					cacheKeyString.append("&"+key+"="+string);
 				}
+				reqParams.put(key, new ArrayList<String>(list));
 			} else {
-				if (value == null) System.out.println("value null "+key);
-				base.append("&"+key+"="+value);
-				reqParams.add(key, value.toString());
+				// if (value == null) System.out.println("value null "+key);
+				parameterString.append("&"+key+"="+value);
+				if (!key.equals("time") && !key.equals("nonce")) {
+					cacheKeyString.append("&"+key+"="+value);
+	            }
+				reqParams.put(key, value.toString());
 			}
 		}
 		
-		reqParams.add("signature", hmacSha1(this.secretKey, base.substring(1)));
-		return reqParams;
-	}
-	
-	protected void perform(String method, String path, TreeMap<String, Object> prms, final RequestCallback callback) {
-		String url = "http://api."+env+"."+project+"."+host+":"+port+path;
-		RequestParams params = sign(prms);
+		String cacheKey = null;
+		final boolean useCache = policy == FetchPolicy.LOCAL_ONLY
+						|| policy == FetchPolicy.LOCAL_AND_REMOTE
+						|| policy == FetchPolicy.LOCAL_OR_REMOTE;
+		
+		if (useCache) {
+			try {
+				cacheKey = Utils.hexString(Utils.sha1(cacheKeyString.toString().getBytes("UTF-8")));
+			} catch (UnsupportedEncodingException e) {
+				throw new RuntimeException(e); // should never happen
+			}
+			String json = null;
+			if (diskCache != null) {
+				try {
+					json = diskCache.get(cacheKey).getString(0);
+				} catch (Exception ex) {
+					// ignore
+					// ex.printStackTrace();
+				}
+			}
+			boolean read = false;
+			if (json != null) {
+				Json response = Json.loads(json);
+				if (response != null) {
+					read = true;
+					callback.success(response, true);
+					if (policy == FetchPolicy.LOCAL_OR_REMOTE)
+						return;
+					
+				}
+			}
+			if (policy == FetchPolicy.LOCAL_ONLY) {
+				if (!read) {
+					callback.failure(new BackbeamException("CachedDataNotFound"));
+				}
+				return;
+			}
+		}
+		
+		final String _cacheKey = cacheKey;
+		reqParams.put("signature", Utils.hmacSha1(this.secretKey, parameterString.substring(1)));
+		
 		// System.out.println("url = "+url);
 		AsyncHttpClient client = new AsyncHttpClient();
 		AsyncHttpResponseHandler handler = new AsyncHttpResponseHandler() {
 		    @Override
 		    public void onSuccess(String json) {
 		        Json response = Json.loads(json);
-		        callback.success(response);
+		        callback.success(response, false);
+		        
+		        if (useCache) {
+		            try {
+						DiskLruCache.Editor editor = diskCache.edit(_cacheKey);
+						editor.set(0, json);
+						editor.commit();
+						diskCache.flush();
+					} catch (IOException e) {
+						e.printStackTrace(); // TODO: handle error
+					}
+		        }
 		    }
 		    
 		    @Override
@@ -268,15 +324,14 @@ public class Backbeam {
 		    }
 		};
 		
-		if (params == null) params = new RequestParams();
 		if (method.equals("GET")) {
-			client.get(url, params, handler);
+			client.get(url, reqParams, handler);
 		} else if (method.equals("POST")) {
 			client.addHeader("Content-Type", "application/x-www-form-urlencoded");
-			client.post(url, params, handler);
+			client.post(url, reqParams, handler);
 		} else if (method.equals("PUT")) {
 			client.addHeader("Content-Type", "application/x-www-form-urlencoded");
-			client.put(url, params, handler);
+			client.put(url, reqParams, handler);
 		} else if (method.equals("DELETE")) {
 			// TODO
 			client.addHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -331,8 +386,8 @@ public class Backbeam {
 		params.put("gateway", "gcm");
 		params.put("token", registrationId);
 		params.put("channels", Arrays.asList(channels));
-		instance().perform("POST", path, params, new RequestCallback() {
-			public void success(Json json) {
+		instance().perform("POST", path, params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
@@ -399,8 +454,8 @@ public class Backbeam {
 			}
 		}
 		
-		instance().perform("POST", "/push/send", params, new RequestCallback() {
-			public void success(Json json) {
+		instance().perform("POST", "/push/send", params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;

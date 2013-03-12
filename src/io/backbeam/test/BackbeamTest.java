@@ -27,7 +27,7 @@ public class BackbeamTest extends Test {
 		test("Test empty query", new TestBlock() {
 			public void run(final DoneBlock done) {
 				Backbeam.select("place").fetch(100, 0, new FetchCallback() {
-					public void success(List<BackbeamObject> objects) {
+					public void success(List<BackbeamObject> objects, int totalCount, boolean fromCache) {
 						assertTrue(objects.size() == 0);
 						done.done();
 					}
@@ -120,7 +120,7 @@ public class BackbeamTest extends Test {
 				Query query = Backbeam.select("place");
 				query.setQuery("where type=?", "Terraza");
 				query.fetch(100, 0, new FetchCallback() {
-					public void success(List<BackbeamObject> objects) {
+					public void success(List<BackbeamObject> objects, int totalCount, boolean fromCache) {
 						assertTrue(objects.size() == 1);
 						BackbeamObject object = objects.get(0);
 						assertTrue(object.getString("name").equals("Final name"));

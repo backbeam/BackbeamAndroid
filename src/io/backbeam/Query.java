@@ -11,9 +11,11 @@ public class Query {
 	private String entity;
 	private String query;
 	private String[] params;
+	private FetchPolicy fetchPolicy;
 	
 	public Query(String entity) {
 		this.entity = entity;
+		this.fetchPolicy = FetchPolicy.REMOTE_ONLY;
 	}
 	
 	public Query setQuery(String query, String... params) {
@@ -57,9 +59,9 @@ public class Query {
 			}
 			prms.put("params", list);
 		}
-		Backbeam.instance().perform("GET", "/data/"+entity, prms, new RequestCallback() {
+		Backbeam.instance().perform("GET", "/data/"+entity, prms, fetchPolicy, new RequestCallback() {
 			@Override
-			public void success(Json response) {
+			public void success(Json response, boolean fromCache) {
 		        Json values = response.get("objects");
 		        Json ids    = response.get("ids");
 		        
@@ -69,7 +71,7 @@ public class Query {
 		        	BackbeamObject obj = objects.get(id.asString());
 		        	list.add(obj);
 		        }
-		        callback.success(list);
+		        callback.success(list, response.get("count").asInt(), fromCache);
 			}
 			
 			@Override
@@ -77,6 +79,14 @@ public class Query {
 				callback.failure(exception);
 			}
 		});
+	}
+
+	public FetchPolicy getFetchPolicy() {
+		return fetchPolicy;
+	}
+
+	public void setFetchPolicy(FetchPolicy fetchPolicy) {
+		this.fetchPolicy = fetchPolicy;
 	}
 	
 }

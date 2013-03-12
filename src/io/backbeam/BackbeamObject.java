@@ -196,8 +196,8 @@ public class BackbeamObject implements Serializable {
 		final String method = id == null ? "POST" : "PUT";
 		
 		final BackbeamObject obj = this;
-		Backbeam.instance().perform(method, path, changes, new RequestCallback() {
-			public void success(Json json) {
+		Backbeam.instance().perform(method, path, changes, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json json, boolean fromCache) {
 				obj.changes = new TreeMap<String, Object>();
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
@@ -236,9 +236,9 @@ public class BackbeamObject implements Serializable {
 		String method = "DELETE";
 		
 		final BackbeamObject obj = this;
-		Backbeam.instance().perform(method, path, null, new RequestCallback() {
+		Backbeam.instance().perform(method, path, null, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
 			@Override
-			public void success(Json json) {
+			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
@@ -267,8 +267,8 @@ public class BackbeamObject implements Serializable {
 		String method = "GET";
 		
 		final BackbeamObject obj = this;
-		Backbeam.instance().perform(method, path, null, new RequestCallback() {
-			public void success(Json json) {
+		Backbeam.instance().perform(method, path, null, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
