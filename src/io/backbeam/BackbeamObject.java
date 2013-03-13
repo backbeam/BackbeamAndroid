@@ -18,6 +18,7 @@ public class BackbeamObject implements Serializable {
 	private Date createdAt;
 	private Date updatedAt;
 	private Hashtable<String, Object> fields;
+	private Hashtable<String, String> loginData;
 	
 	private transient TreeMap<String, Object> changes;
 	
@@ -61,12 +62,18 @@ public class BackbeamObject implements Serializable {
 	private void fillValues(Json obj, Map<String, BackbeamObject> references) {
 		changes = new TreeMap<String, Object>();
 		for (String key : obj.keys()) {
-			if (key.equals("id")) {
-				this.id = obj.get(key).asString();
-			} else if (key.equals("created_at")) {
+			if (key.equals("created_at")) {
 				this.createdAt = new Date(obj.get(key).asLong());
 			} else if (key.equals("updated_at")) {
 				this.updatedAt = new Date(obj.get(key).asLong());
+			} else if (key.equals("type")) {
+				this.entity = obj.get(key).asString();
+			} else if (key.startsWith("login_")) {
+				String _key = key.substring("login_".length());
+				if (loginData == null) {
+					loginData = new Hashtable<String, String>();
+				}
+				loginData.put(_key, obj.get(key).str());
 			} else {
 				int i = key.indexOf('#');
 				if (i > 0) {
@@ -94,16 +101,22 @@ public class BackbeamObject implements Serializable {
 						}
 						value = location;
 					} else if (type.equals("r") && val.isMap()) {
-						Json ids = val.get("result");
-						List<BackbeamObject> results = new ArrayList<BackbeamObject>(ids.size());
-						for (Json o : ids) {
-							BackbeamObject reference = references.get(o.asString());
-							if (reference != null) {
-								results.add(reference);
+						String _id = val.get("id").str();
+						String _type = val.get("type").str();
+						if (_id != null && _type != null) {
+							value = new BackbeamObject(_type, _id);
+						} else {
+							Json ids = val.get("result");
+							List<BackbeamObject> results = new ArrayList<BackbeamObject>(ids.size());
+							for (Json o : ids) {
+								BackbeamObject reference = references.get(o.asString());
+								if (reference != null) {
+									results.add(reference);
+								}
 							}
+							JoinResult result = new JoinResult(val.get("count").asInt(), results);
+							value = result;
 						}
-						JoinResult result = new JoinResult(val.get("count").asInt(), results);
-						value = result;
 					} else if (type.equals("r") && val.isString()) {
 						value = references.get(val.asString());
 					}
@@ -114,7 +127,21 @@ public class BackbeamObject implements Serializable {
 			}
 		}
 	}
+	
+	public String loginDataForProvider(String provider, String key) {
+		if (loginData == null) return null;
+		String _key = provider+"_"+key;
+		return loginData.get(_key);
+	}
+	
+	public String getFacebookData(String key) {
+		return loginDataForProvider("fb", key);
+	}
 
+	public String getTwitterData(String key) {
+		return loginDataForProvider("tw", key);
+	}
+	
 	public Date getDate(String field) {
 		Object o = fields.get(field);
 		if (o instanceof Date) return (Date) o;
