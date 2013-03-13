@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 public class BackbeamObject implements Serializable {
@@ -153,9 +154,33 @@ public class BackbeamObject implements Serializable {
 		changes.put("set-"+field, ""+date.getTime());
 	}
 	
+	public Object getRawValue(String field) {
+		return fields.get(field);
+	}
+	
+	public void setRawValue(String field, Object value) {
+		if (value instanceof String) {
+			setString(field, (String) value);
+		} else if (value instanceof Number) {
+			setNumber(field, (Number) value);
+		} else if (value instanceof Date) {
+			setDate(field, (Date) value);
+		} else if (value instanceof Location) {
+			setLocation(field, (Location) value);
+		} else if (value instanceof BackbeamObject) {
+			setObject(field, (BackbeamObject) value);
+		}
+	}
+	
 	public String getString(String field) {
 		Object o = fields.get(field);
 		if (o instanceof String) return (String) o;
+		return null;
+	}
+	
+	public Number getNumber(String field) {
+		Object o = fields.get(field);
+		if (o instanceof Number) return (Number) o;
 		return null;
 	}
 	
@@ -173,6 +198,12 @@ public class BackbeamObject implements Serializable {
 	public void setObject(String field, BackbeamObject object) {
 		fields.put(field, object);
 		changes.put("set-"+field, object.getId());
+	}
+	
+	public void removeField(String field) {
+		String command = "del-"+field;
+		fields.remove(field);
+		changes.put(command, "-");
 	}
 	
 	public void addObject(String field, BackbeamObject object) {
@@ -216,6 +247,28 @@ public class BackbeamObject implements Serializable {
 			value += location.getAddress();
 		}
 		changes.put("set-"+field, value);
+	}
+	
+	public void setNumber(String field, Number value) {
+		fields.put(field, value);
+		changes.put("set-"+field, value);
+	}
+	
+	// TODO: support many increments without overriding previous command
+	public void incrementNumber(String field, int value) {
+		Number n = getNumber(field);
+		if (n != null) {
+			n = n.intValue() + value;
+		} else {
+			n = value;
+		}
+		fields.put(field, n);
+		String command = "incr-"+field;
+		changes.put(n.toString(), command);
+	}
+	
+	public Set<String> getFieldNames() {
+		return fields.keySet();
 	}
 	
 	public void save(final ObjectCallback callback) {
@@ -290,11 +343,21 @@ public class BackbeamObject implements Serializable {
 	}
 	
 	public void refresh(final ObjectCallback callback) {
+		refresh(null, callback);
+	}
+	
+	public void refresh(String joins, final ObjectCallback callback) {
 		String path = "/data/"+entity+"/"+id;
 		String method = "GET";
 		
+		TreeMap<String, Object> params = null;
+		if (joins != null) {
+			params = new TreeMap<String, Object>();
+			params.put("joins", joins);
+		}
+		
 		final BackbeamObject obj = this;
-		Backbeam.instance().perform(method, path, null, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+		Backbeam.instance().perform(method, path, params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
 			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
@@ -335,6 +398,18 @@ public class BackbeamObject implements Serializable {
 
 	void setEntity(String entity) {
 		this.entity = entity;
+	}
+	
+	public boolean isEmpty() {
+	    return this.createdAt == null;
+	}
+
+	public boolean idDirty() {
+	    return this.changes.size() > 0;
+	}
+
+	public boolean isNew() {
+	    return this.id == null;
 	}
 
 }

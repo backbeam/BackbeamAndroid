@@ -162,10 +162,29 @@ public class Backbeam {
 		}
 	}
 	
+	public static BackbeamObject read(String entity, String id, String joins, ObjectCallback callback) {
+		BackbeamObject obj = new BackbeamObject(entity, id);
+		obj.refresh(joins, callback);
+		return obj;
+	}
+	
+	public static BackbeamObject read(String entity, String id, ObjectCallback callback) {
+		BackbeamObject obj = new BackbeamObject(entity, id);
+		obj.refresh(callback);
+		return obj;
+	}
+	
 	public static void login(String email, String password, final ObjectCallback callback) {
+		login(email, password, null, callback);
+	}
+	
+	public static void login(String email, String password, String joins, final ObjectCallback callback) {
 		TreeMap<String, Object> params = new TreeMap<String, Object>();
 		params.put("email", email);
 		params.put("password", password);
+		if (joins != null) {
+			params.put("joins", joins);
+		}
 		instance().perform("POST", "/user/email/login", params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
 			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
@@ -173,17 +192,11 @@ public class Backbeam {
 					return;
 				}
 				String status = json.get("status").asString();
-				Json values = json.get("objects");
 				if (status == null) {
 					callback.failure(new BackbeamException("InvalidResponse"));
 					return;
 				}
-				String id = json.get("id").asString();
-				Map<String, BackbeamObject> objects = BackbeamObject.objectsFromValues(values, null);
-				BackbeamObject object = objects.get(id);
-				if (object != null) {
-					setCurrentUser(object);
-				}
+				BackbeamObject object = loginUserWithResponse(json);
 				callback.success(object);
 			}
 			@Override
@@ -191,6 +204,48 @@ public class Backbeam {
 				callback.failure(exception);
 			}
 		});
+	}
+	
+	public static void verifyCode(String code, final ObjectCallback callback) {
+		verifyCode(code, null, callback);
+	}
+	
+	public static void verifyCode(String code, String joins, final ObjectCallback callback) {
+		TreeMap<String, Object> params = new TreeMap<String, Object>();
+		params.put("code", code);
+		if (joins != null) {
+			params.put("joins", joins);
+		}
+		instance().perform("POST", "/user/email/verify", params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json json, boolean fromCache) {
+				if (!json.isMap()) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				String status = json.get("status").asString();
+				if (status == null) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				BackbeamObject object = loginUserWithResponse(json);
+				callback.success(object);
+			}
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
+	}
+	
+	private static BackbeamObject loginUserWithResponse(Json json) {
+		String id = json.get("id").asString();
+		Json values = json.get("objects");
+		Map<String, BackbeamObject> objects = BackbeamObject.objectsFromValues(values, null);
+		BackbeamObject object = objects.get(id);
+		if (object != null) {
+			setCurrentUser(object);
+		}
+		return object;
 	}
 	
 	public static void requestPasswordReset(String email, final OperationCallback callback) {
