@@ -105,7 +105,10 @@ public class BackbeamObject implements Serializable {
 						String _id = val.get("id").str();
 						String _type = val.get("type").str();
 						if (_id != null && _type != null) {
-							value = new BackbeamObject(_type, _id);
+							value = references.get(_id);
+							if (value == null) {
+								value = new BackbeamObject(_type, _id);
+							}
 						} else {
 							Json ids = val.get("result");
 							List<BackbeamObject> results = new ArrayList<BackbeamObject>(ids.size());
@@ -343,21 +346,24 @@ public class BackbeamObject implements Serializable {
 	}
 	
 	public void refresh(final ObjectCallback callback) {
-		refresh(null, callback);
+		refresh(null, null, callback);
 	}
 	
-	public void refresh(String joins, final ObjectCallback callback) {
+	public void refresh(String joins, Object[] params, final ObjectCallback callback) {
 		String path = "/data/"+entity+"/"+id;
 		String method = "GET";
 		
-		TreeMap<String, Object> params = null;
+		TreeMap<String, Object> prms = null;
 		if (joins != null) {
-			params = new TreeMap<String, Object>();
-			params.put("joins", joins);
+			prms = new TreeMap<String, Object>();
+			prms.put("joins", joins);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
 		}
 		
 		final BackbeamObject obj = this;
-		Backbeam.instance().perform(method, path, params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+		Backbeam.instance().perform(method, path, prms, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
 			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));

@@ -163,9 +163,9 @@ public class Backbeam {
 		}
 	}
 	
-	public static BackbeamObject read(String entity, String id, String joins, ObjectCallback callback) {
+	public static BackbeamObject read(String entity, String id, String joins, Object[] params, ObjectCallback callback) {
 		BackbeamObject obj = new BackbeamObject(entity, id);
-		obj.refresh(joins, callback);
+		obj.refresh(joins, params, callback);
 		return obj;
 	}
 	
