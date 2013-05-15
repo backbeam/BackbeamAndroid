@@ -5,6 +5,10 @@ import java.io.Reader;
 import java.io.StringWriter;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -55,6 +59,36 @@ public class Utils {
 	        throw new RuntimeException(e); // should never happen
 	    } 
 	    return md.digest(input);
+	}
+	
+	public static List<String> stringsFromParams(Object[] params) {
+		if (params == null) return Collections.emptyList();
+		List<String> list = new ArrayList<String>(params.length);
+		for (Object obj : params) {
+			list.add(stringFromObject(obj, true));
+		}
+		return list;
+	}
+	
+	public static String stringFromObject(Object obj, boolean addEntity) {
+		if (obj instanceof String) {
+			return (String) obj;
+		} else if (obj instanceof BackbeamObject) {
+			BackbeamObject o = (BackbeamObject) obj;
+			if (addEntity) {
+				return o.getEntity()+"/"+o.getId();
+			} else {
+				return o.getId();
+			}
+		} else if (obj instanceof Date) {
+			return ""+((Date) obj).getTime();
+		} else if (obj instanceof Location) {
+			Location location = (Location) obj;
+			String s = location.getLatitude()+","+location.getLongitude()+","+location.getAltitude()+"|";
+			if (location.getAddress() != null) s += location.getAddress();
+			return s;
+		}
+		return null;
 	}
 
 }

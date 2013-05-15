@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -175,17 +176,20 @@ public class Backbeam {
 	}
 	
 	public static void login(String email, String password, final ObjectCallback callback) {
-		login(email, password, null, callback);
+		login(email, password, null, null, callback);
 	}
 	
-	public static void login(String email, String password, String joins, final ObjectCallback callback) {
-		TreeMap<String, Object> params = new TreeMap<String, Object>();
-		params.put("email", email);
-		params.put("password", password);
+	public static void login(String email, String password, String joins, Object[] params, final ObjectCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("email", email);
+		prms.put("password", password);
 		if (joins != null) {
-			params.put("joins", joins);
+			prms.put("joins", joins);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
 		}
-		instance().perform("POST", "/user/email/login", params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+		instance().perform("POST", "/user/email/login", prms, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
 			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
@@ -207,16 +211,19 @@ public class Backbeam {
 	}
 	
 	public static void verifyCode(String code, final ObjectCallback callback) {
-		verifyCode(code, null, callback);
+		verifyCode(code, null, null, callback);
 	}
 	
-	public static void verifyCode(String code, String joins, final ObjectCallback callback) {
-		TreeMap<String, Object> params = new TreeMap<String, Object>();
-		params.put("code", code);
+	public static void verifyCode(String code, String joins, Object[] params, final ObjectCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("code", code);
 		if (joins != null) {
-			params.put("joins", joins);
+			prms.put("joins", joins);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
 		}
-		instance().perform("POST", "/user/email/verify", params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+		instance().perform("POST", "/user/email/verify", prms, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
 			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
 					callback.failure(new BackbeamException("InvalidResponse"));
@@ -282,6 +289,8 @@ public class Backbeam {
 		params.put("key", this.sharedKey);
 		params.put("time", new Date().getTime()+"");
 		params.put("nonce", UUID.randomUUID().toString());
+		params.put("method", method);
+		params.put("path", path);
 		
 		RequestParams reqParams = new RequestParams();
 		StringBuilder parameterString = new StringBuilder();
@@ -345,6 +354,9 @@ public class Backbeam {
 				return;
 			}
 		}
+		
+		params.remove("method");
+		params.remove("path");
 		
 		final String _cacheKey = cacheKey;
 		reqParams.put("signature", Utils.hmacSha1(this.secretKey, parameterString.substring(1)));
@@ -525,6 +537,84 @@ public class Backbeam {
 					return;
 				}
 				callback.success();
+			}
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
+	}
+	
+	public static void facebookLogin(String accessToken, String joins, Object[] params, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("access_token", accessToken);
+		if (joins != null) {
+			prms.put("joins", joins);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
+		}
+		socialSignup("facebook", prms, callback);
+	}
+	
+	public static void facebookLogin(String accessToken, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("access_token", accessToken);
+		socialSignup("facebook", prms, callback);
+	}
+	
+	public static void twitterLogin(String oauthToken, String oauthTokenSecret, String joins, Object[] params, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("oauth_token", oauthToken);
+		prms.put("oauth_token_secret", oauthTokenSecret);
+		if (joins != null) {
+			prms.put("joins", joins);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
+		}
+		socialSignup("twitter", prms, callback);
+	}
+	
+	public static void twitterLogin(String oauthToken, String oauthTokenSecret, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("oauth_token", oauthToken);
+		prms.put("oauth_token_secret", oauthTokenSecret);
+		socialSignup("twitter", prms, callback);
+	}
+	
+	private static void socialSignup(String provider, TreeMap<String, Object> params, final SignupCallback callback) {
+		
+		instance().perform("POST", "/user/"+provider+"/signup", params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json response, boolean fromCache) {
+				if (!response.isMap()) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				String status = response.get("status").asString();
+				if (status == null) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				
+				boolean isNew = status.equals("Success");
+				if (!isNew && !status.equals("UserAlreadyExists")) {
+					callback.failure(new  BackbeamException(status));
+					return;
+				}
+				
+		        Json values = response.get("objects");
+		        String id   = response.get("id").str();
+		        String auth = response.get("auth").str();
+		        
+		        if (values == null || id == null || auth == null) {
+		        	callback.failure(new  BackbeamException(status));
+		        	return;
+		        }
+
+		        Map<String, BackbeamObject> objects = BackbeamObject.objectsFromValues(values, null);
+				
+				callback.success(objects.get(id), isNew);
 			}
 			@Override
 			public void failure(BackbeamException exception) {
