@@ -1,5 +1,10 @@
 package io.backbeam;
 
+import io.socket.IOAcknowledge;
+import io.socket.IOCallback;
+import io.socket.SocketIO;
+import io.socket.SocketIOException;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -15,10 +20,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import android.app.PendingIntent;
 import android.content.Context;
@@ -41,17 +50,20 @@ public class Backbeam {
 	private String project;
 	private String sharedKey;
 	private String secretKey;
-	private String twitterConsumerKey;
-	private String twitterConsumerSecret;
 	private IntentCallback pushHandler;
 	private String registrationId;
 	private DiskLruCache diskCache;
 	
 	private BackbeamObject currentUser;
+	private SocketIO socketio;
+	private Map<String, List<RealTimeEventListener>> roomListeners;
+	private List<RealTimeConnectionListener> realTimeListeners;
 	
 	private static Backbeam instance;
 	
 	private Backbeam() {
+		roomListeners = new HashMap<String, List<RealTimeEventListener>>();
+		realTimeListeners = new ArrayList<RealTimeConnectionListener>();
 	}
 	
 	protected static Backbeam instance() {
@@ -95,6 +107,204 @@ public class Backbeam {
 	
 	public static BackbeamObject currentUser() {
 		return instance().currentUser;
+	}
+	
+	private String roomName(String eventName) {
+		return project+"/"+env+"/"+eventName;
+	}
+	
+	public static void subscribeToRealTimeEvents(String eventName, RealTimeEventListener listener) {
+		instance()._subscribeToRealTimeEvents(eventName, listener);
+	}
+	
+	public void _subscribeToRealTimeEvents(String eventName, RealTimeEventListener listener) {
+		String room = roomName(eventName);
+		List<RealTimeEventListener> listeners = roomListeners.get(room);
+		if (listeners == null) {
+			listeners = new ArrayList<RealTimeEventListener>();
+			roomListeners.put(room, listeners);
+		}
+		listeners.add(listener);
+		
+		if (socketio != null && socketio.isConnected()) {
+			TreeMap<String, Object> params = new TreeMap<String, Object>();
+			params.put("room", room);
+			socketio.emit("subscribe", socketioMessage(params));
+		}
+	}
+	
+	private JSONObject socketioMessage(TreeMap<String, Object> params) {
+		sign(params, null);
+		JSONObject object = new JSONObject(params);
+		return object;
+	}
+	
+	public void _unsubscribeFromRealTimeEvents(String eventName, RealTimeEventListener listener) {
+		String room = roomName(eventName);
+		List<RealTimeEventListener> listeners = roomListeners.get(room);
+		if (listeners != null) {
+			listeners.remove(listener);
+			if (listeners.size() == 0) {
+				roomListeners.remove(room);
+				if (socketio != null && socketio.isConnected()) {
+					TreeMap<String, Object> params = new TreeMap<String, Object>();
+					params.put("room", room);
+					socketio.emit("unsubscribe", socketioMessage(params));
+				}
+			}
+		}
+	}
+	
+	public static void unsubscribeFromRealTimeEvents(String eventName, RealTimeEventListener listener) {
+		instance()._unsubscribeFromRealTimeEvents(eventName, listener);
+	}
+	
+	public void _sendRealTimeEvent(String eventName, Map<String, String> message) {
+		if (socketio != null && socketio.isConnected()) {
+			String room = roomName(eventName);
+			TreeMap<String, Object> params = new TreeMap<String, Object>();
+			params.put("room", room);
+			for (Map.Entry<String, String> entry : message.entrySet()) {
+				params.put("_"+entry.getKey(), entry.getValue());
+			}
+			socketio.emit("publish", socketioMessage(params));
+		}
+	}
+	
+	public static void sendRealTimeEvent(String eventName, Map<String, String> message) {
+		instance()._sendRealTimeEvent(eventName, message);
+	}
+	
+	public static void enableRealtime() {
+		instance()._enableRealTime();
+	}
+	
+	private void _enableRealTime() {
+		if (socketio != null) return;
+		reconnect();
+	}
+	
+	public static void disableRealtime() {
+		instance()._disableRealTime();
+	}
+	
+	private void _disableRealTime() {
+		if (socketio != null) {
+			socketio.disconnect();
+			socketio = null;
+		}
+	}
+	
+	public static void addRealTimeConnectionListener(RealTimeConnectionListener listener) {
+		instance().realTimeListeners.add(listener);
+	}
+	
+	public static void removeRealTimeConnectionListener(RealTimeConnectionListener listener) {
+		instance().realTimeListeners.remove(listener);
+	}
+	
+	private void fireConnecting() {
+		for (RealTimeConnectionListener listener : realTimeListeners) {
+			listener.realTimeConnecting();
+		}
+	}
+	
+	private void fireConnected() {
+		System.out.println("fire connected");
+		for (RealTimeConnectionListener listener : realTimeListeners) {
+			listener.realTimeConnected();
+		}
+	}
+	
+	private void fireDisconnected() {
+		for (RealTimeConnectionListener listener : realTimeListeners) {
+			listener.realTimeDisconnected();
+		}
+	}
+	
+	private void fireFailed(Exception e) {
+		for (RealTimeConnectionListener listener : realTimeListeners) {
+			listener.realTimeDisconnected();
+		}
+	}
+	
+	private void reconnect() {
+		// https://github.com/Gottox/socket.io-java-client
+		fireConnecting();
+		String url = "http://api."+env+"."+project+"."+host+":"+port;
+		try {
+			socketio = new SocketIO(url, new IOCallback() {
+				
+				@Override
+				public void onMessage(JSONObject json, IOAcknowledge ioa) {
+				}
+				
+				@Override
+				public void onMessage(String string, IOAcknowledge ioa) {
+				}
+				
+				@Override
+				public void onError(SocketIOException error) {
+					fireFailed(error);
+					reconnect();
+				}
+				
+				@Override
+				public void onDisconnect() {
+					fireDisconnected();
+				}
+				
+				@Override
+				public void onConnect() {
+					for (String room : roomListeners.keySet()) {
+						TreeMap<String, Object> params = new TreeMap<String, Object>();
+						params.put("room", room);
+						socketio.emit("subscribe", socketioMessage(params));
+					}
+					
+					fireConnected();
+				}
+				
+				@Override
+				public void on(String event, IOAcknowledge ioa, Object... args) {
+					if (args.length > 0 && args[0].getClass() == JSONObject.class) {
+						JSONObject message = (JSONObject) args[0];
+						try {
+							String room = message.getString("room");
+							String[] parts = room.split("/");
+							if (parts.length == 3 && parts[0].equals(project) && parts[1].equals(env)) {
+								String eventName = parts[2];
+								List<RealTimeEventListener> listeners = roomListeners.get(room);
+								if (listeners.size() > 0) {
+									Map<String, String> params = new HashMap<String, String>();
+									@SuppressWarnings("unchecked")
+									Iterator<String> iter = (Iterator<String>) message.keys();
+									while (iter.hasNext()) {
+										String key = iter.next();
+										if (key.length() > 0 && key.charAt(0) == '_') {
+											String value = message.getString(key);
+											if (value != null) {
+												params.put(key.substring(1), value);
+											}
+										}
+									}
+									
+									for (RealTimeEventListener listener : listeners) {
+										listener.realTimeEventReceived(eventName, params);
+									}
+								}
+								
+							}
+						} catch(JSONException e) {
+							// ignore, wrong message (i.e. not room)
+						}
+						
+					}
+				}
+			});
+		} catch(Exception e) {
+			fireFailed(e);
+		}
 	}
 
 	protected static void setCurrentUser(BackbeamObject obj) {
@@ -282,17 +492,11 @@ public class Backbeam {
 		});
 	}
 	
-	protected void perform(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final RequestCallback callback) {
-		String url = "http://api."+env+"."+project+"."+host+":"+port+path;
-		
-		if (params == null) params = new TreeMap<String, Object>();
+	private String sign(TreeMap<String, Object> params, RequestParams reqParams) {
 		params.put("key", this.sharedKey);
 		params.put("time", new Date().getTime()+"");
 		params.put("nonce", UUID.randomUUID().toString());
-		params.put("method", method);
-		params.put("path", path);
 		
-		RequestParams reqParams = new RequestParams();
 		StringBuilder parameterString = new StringBuilder();
 		StringBuilder cacheKeyString = new StringBuilder();
 		for (String key : params.keySet()) {
@@ -305,16 +509,39 @@ public class Backbeam {
 					parameterString.append("&"+key+"="+string);
 					cacheKeyString.append("&"+key+"="+string);
 				}
-				reqParams.put(key, new ArrayList<String>(list));
+				if (reqParams != null) reqParams.put(key, new ArrayList<String>(list));
 			} else {
-				// if (value == null) System.out.println("value null "+key);
 				parameterString.append("&"+key+"="+value);
 				if (!key.equals("time") && !key.equals("nonce")) {
 					cacheKeyString.append("&"+key+"="+value);
 	            }
-				reqParams.put(key, value.toString());
+				if (reqParams != null) reqParams.put(key, value.toString());
 			}
 		}
+		String signature = Utils.hmacSha1(this.secretKey, parameterString.substring(1));
+		if (reqParams != null) {
+			reqParams.put("signature", signature);
+		} else {
+			params.put("signature", signature);
+		}
+
+		return cacheKeyString.toString();
+	}
+	
+	protected void perform(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final RequestCallback callback) {
+		String url = "http://api."+env+"."+project+"."+host+":"+port+path;
+		
+		if (params == null) params = new TreeMap<String, Object>();
+		params.put("key", this.sharedKey);
+		params.put("time", new Date().getTime()+"");
+		params.put("nonce", UUID.randomUUID().toString());
+		params.put("method", method);
+		params.put("path", path);
+		
+		RequestParams reqParams = new RequestParams();
+		String cacheKeyString = sign(params, reqParams);
+		params.remove("method");
+		params.remove("path");
 		
 		String cacheKey = null;
 		final boolean useCache = policy == FetchPolicy.LOCAL_ONLY
@@ -355,11 +582,7 @@ public class Backbeam {
 			}
 		}
 		
-		params.remove("method");
-		params.remove("path");
-		
 		final String _cacheKey = cacheKey;
-		reqParams.put("signature", Utils.hmacSha1(this.secretKey, parameterString.substring(1)));
 		
 		// System.out.println("url = "+url);
 		AsyncHttpClient client = new AsyncHttpClient();
@@ -400,8 +623,8 @@ public class Backbeam {
 			client.addHeader("Content-Type", "application/x-www-form-urlencoded");
 			client.put(url, reqParams, handler);
 		} else if (method.equals("DELETE")) {
-			// TODO
-			client.addHeader("Content-Type", "application/x-www-form-urlencoded");
+			reqParams.put("_method", "DELETE");
+			client.get(url, reqParams, handler);
 		} else {
 			callback.failure(new BackbeamException("Unknown HTTP method: "+method));
 		}
