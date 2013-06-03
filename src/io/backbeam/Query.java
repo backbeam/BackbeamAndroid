@@ -55,7 +55,7 @@ public class Query {
 		});
 	}
 	
-	public void near(String field, double lat, double lon, int limit, final FetchCallback callback) {
+	public void near(String field, double lat, double lon, int limit, final NearFetchCallback callback) {
 		TreeMap<String, Object> prms = new TreeMap<String, Object>();
 		if (query != null) {
 			prms.put("q", query);
@@ -69,8 +69,9 @@ public class Query {
 		Backbeam.instance().perform("GET", "/data/"+entity+"/near/"+field, prms, fetchPolicy, new RequestCallback() {
 			@Override
 			public void success(Json response, boolean fromCache) {
-		        Json values = response.get("objects");
-		        Json ids    = response.get("ids");
+		        Json values    = response.get("objects");
+		        Json ids       = response.get("ids");
+		        Json distances = response.get("distances");
 		        
 		        Map<String, BackbeamObject> objects = BackbeamObject.objectsFromValues(values, null);
 		        List<BackbeamObject> list = new ArrayList<BackbeamObject>(ids.size());
@@ -78,7 +79,11 @@ public class Query {
 		        	BackbeamObject obj = objects.get(id.asString());
 		        	list.add(obj);
 		        }
-		        callback.success(list, response.get("count").asInt(), fromCache);
+		        List<Integer> dists = new ArrayList<Integer>();
+		        for (Json json : distances) {
+					dists.add(json.asInt());
+				}
+		        callback.success(list, response.get("count").asInt(), dists, fromCache);
 			}
 			
 			@Override

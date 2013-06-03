@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -64,6 +66,8 @@ public class Backbeam {
 	private Backbeam() {
 		roomListeners = new HashMap<String, List<RealTimeEventListener>>();
 		realTimeListeners = new ArrayList<RealTimeConnectionListener>();
+		Logger log = Logger.getLogger("io.socket");
+		log.setLevel(Level.OFF);
 	}
 	
 	protected static Backbeam instance() {
