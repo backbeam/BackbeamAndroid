@@ -3,6 +3,8 @@ package io.backbeam;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -16,6 +18,14 @@ import javax.crypto.spec.SecretKeySpec;
 import android.util.Base64;
 
 public class Utils {
+	
+	public static String urlEncode(String s) {
+		try {
+			return URLEncoder.encode(s, "UTF-8");
+		} catch (UnsupportedEncodingException e) {
+			throw new RuntimeException(e);
+		}
+	}
 	
 	public static String reader2String(Reader reader) throws IOException {
         try {

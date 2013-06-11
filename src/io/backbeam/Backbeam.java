@@ -28,6 +28,8 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.net.ssl.SSLContext;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -47,6 +49,7 @@ public class Backbeam {
 	
 	private Context context;
 	private String host = "backbeamapps.com";
+	private String protocol = "http";
 	private int port = 80;
 	private String env = "pro";
 	private String project;
@@ -79,6 +82,15 @@ public class Backbeam {
 	
 	public static void setHost(String host) {
 		instance().host = host;
+	}
+	
+	public static void setProtocol(String protocol) {
+		instance().protocol = protocol.toLowerCase();
+		if (instance().protocol.equals("http")) {
+			instance().port = 80;
+		} else if (instance().protocol.equals("https")) {
+			instance().port = 443;
+		}
 	}
 	
 	public static void setPort(int port) {
@@ -214,7 +226,6 @@ public class Backbeam {
 	}
 	
 	private void fireConnected() {
-		System.out.println("fire connected");
 		for (RealTimeConnectionListener listener : realTimeListeners) {
 			listener.realTimeConnected();
 		}
@@ -228,15 +239,20 @@ public class Backbeam {
 	
 	private void fireFailed(Exception e) {
 		for (RealTimeConnectionListener listener : realTimeListeners) {
-			listener.realTimeDisconnected();
+			listener.realTimeConnectionFailed(e);
 		}
 	}
 	
 	private void reconnect() {
 		// https://github.com/Gottox/socket.io-java-client
 		fireConnecting();
-		String url = "http://api."+env+"."+project+"."+host+":"+port;
+		// TODO: SSL is not working. See https://github.com/Gottox/socket.io-java-client/issues/14
+		// String url  = protocol+"://api-"+env+"-"+project+"."+host+":"+port;
+		String url = "http://api-"+env+"-"+project+"."+host+":"+(port == 443 ? 80 : port);
 		try {
+//			if ("https".equals(protocol)) {
+//				SocketIO.setDefaultSSLSocketFactory(SSLContext.getInstance("Default"));
+//			}
 			socketio = new SocketIO(url, new IOCallback() {
 				
 				@Override
@@ -250,7 +266,7 @@ public class Backbeam {
 				@Override
 				public void onError(SocketIOException error) {
 					fireFailed(error);
-					reconnect();
+					// reconnect();
 				}
 				
 				@Override
@@ -496,10 +512,16 @@ public class Backbeam {
 		});
 	}
 	
-	private String sign(TreeMap<String, Object> params, RequestParams reqParams) {
+	protected String sign(TreeMap<String, Object> params, RequestParams reqParams) {
+		return sign(params, reqParams, true);
+	}
+	
+	protected String sign(TreeMap<String, Object> params, RequestParams reqParams, boolean withNonce) {
 		params.put("key", this.sharedKey);
-		params.put("time", new Date().getTime()+"");
-		params.put("nonce", UUID.randomUUID().toString());
+		if (withNonce) {
+			params.put("time", new Date().getTime()+"");
+			params.put("nonce", UUID.randomUUID().toString());
+		}
 		
 		StringBuilder parameterString = new StringBuilder();
 		StringBuilder cacheKeyString = new StringBuilder();
@@ -532,13 +554,14 @@ public class Backbeam {
 		return cacheKeyString.toString();
 	}
 	
+	protected String composeURL(String path) {
+		return protocol+"://api-"+env+"-"+project+"."+host+":"+port+path;
+	}
+	
 	protected void perform(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final RequestCallback callback) {
-		String url = "http://api."+env+"."+project+"."+host+":"+port+path;
+		String url = composeURL(path);
 		
 		if (params == null) params = new TreeMap<String, Object>();
-		params.put("key", this.sharedKey);
-		params.put("time", new Date().getTime()+"");
-		params.put("nonce", UUID.randomUUID().toString());
 		params.put("method", method);
 		params.put("path", path);
 		

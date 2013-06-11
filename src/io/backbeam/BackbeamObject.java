@@ -417,5 +417,30 @@ public class BackbeamObject implements Serializable {
 	public boolean isNew() {
 	    return this.id == null;
 	}
+	
+	public String composeFileURL(TreeMap<String, Object> params) {
+		String path = "/data/file/download/"+this.id+"/"+getNumber("version");
+		if (params == null) {
+			params = new TreeMap<String, Object>();
+		}
+		params.put("method", "GET");
+		params.put("path", path);
+		Backbeam.instance().sign(params, null, false);
+		params.remove("method");
+		params.remove("path");
+		StringBuilder builder = new StringBuilder(Backbeam.instance().composeURL(path));
+		builder.append("?");
+		boolean first = true;
+		for (Map.Entry<String, Object> entry : params.entrySet()) {
+			if (!first) {
+				builder.append("&");
+			}
+			builder.append(entry.getKey());
+			builder.append("=");
+			builder.append(Utils.urlEncode(entry.getValue().toString()));
+			first = false;
+		}
+		return builder.toString();
+	}
 
 }
