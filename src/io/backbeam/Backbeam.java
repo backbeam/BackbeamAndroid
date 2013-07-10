@@ -28,8 +28,6 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.net.ssl.SSLContext;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -191,7 +189,7 @@ public class Backbeam {
 		instance()._sendRealTimeEvent(eventName, message);
 	}
 	
-	public static void enableRealtime() {
+	public static void enableRealTime() {
 		instance()._enableRealTime();
 	}
 	
@@ -200,7 +198,7 @@ public class Backbeam {
 		reconnect();
 	}
 	
-	public static void disableRealtime() {
+	public static void disableRealTime() {
 		instance()._disableRealTime();
 	}
 	
