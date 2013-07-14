@@ -102,12 +102,12 @@ public class BackbeamObject implements Serializable {
 						}
 						value = location;
 					} else if (type.equals("r") && val.isMap()) {
-						String _id = val.get("id").str();
-						String _type = val.get("type").str();
+						Json _id = val.get("id");
+						Json _type = val.get("type");
 						if (_id != null && _type != null) {
 							value = references.get(_id);
 							if (value == null) {
-								value = new BackbeamObject(_type, _id);
+								value = new BackbeamObject(_type.str(), _id.str());
 							}
 						} else {
 							Json ids = val.get("result");
