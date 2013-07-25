@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+import com.loopj.android.http.RequestParams;
+
 public class BackbeamObject implements Serializable {
 
 	private static final long serialVersionUID = 8296458723947296629L;
@@ -287,6 +289,7 @@ public class BackbeamObject implements Serializable {
 					return;
 				}
 				String status = json.get("status").asString();
+				String auth   = json.get("auth").asString();
 				Json values   = json.get("objects");
 				String id     = json.get("id").asString();
 				if (status == null || values == null || id == null) {
@@ -302,8 +305,8 @@ public class BackbeamObject implements Serializable {
 				}
 				if (entity.equals("user") && method.equals("POST")) {
 					Backbeam.logout();
-					if (status.equals("Success")) {
-						Backbeam.setCurrentUser(obj);
+					if (status.equals("Success") && auth != null) {
+						Backbeam.setCurrentUser(obj, auth);
 					}
 				}
 				callback.success(obj);
@@ -423,11 +426,15 @@ public class BackbeamObject implements Serializable {
 		if (params == null) {
 			params = new TreeMap<String, Object>();
 		}
+		
 		params.put("method", "GET");
 		params.put("path", path);
-		Backbeam.instance().sign(params, null, false);
-		params.remove("method");
-		params.remove("path");
+		params.put("key", Backbeam.instance().sharedKey);
+		
+		RequestParams reqParams = new RequestParams();
+		String signature = Backbeam.instance().signature(params);
+		reqParams.put("signature", signature);
+
 		StringBuilder builder = new StringBuilder(Backbeam.instance().composeURL(path));
 		builder.append("?");
 		boolean first = true;

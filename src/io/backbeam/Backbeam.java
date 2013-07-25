@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.apache.http.Header;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -51,13 +52,18 @@ public class Backbeam {
 	private int port = 80;
 	private String env = "pro";
 	private String project;
-	private String sharedKey;
+	protected String sharedKey;
 	private String secretKey;
 	private IntentCallback pushHandler;
+	protected GCMCallback gcmCallback;
 	private String registrationId;
 	private DiskLruCache diskCache;
 	
+	private String webVersion;
+	private String httpAuth;
+	
 	private BackbeamObject currentUser;
+	private String authCode;
 	private SocketIO socketio;
 	private Map<String, List<RealTimeEventListener>> roomListeners;
 	private List<RealTimeConnectionListener> realTimeListeners;
@@ -111,12 +117,20 @@ public class Backbeam {
 		instance().sharedKey = key;
 	}
 	
+	public static void setWebVersion(String webVersion) {
+		instance().webVersion = webVersion;
+	}
+	
+	public static void setHttpAuth(String httpAuth) {
+		instance().httpAuth = httpAuth;
+	}
+	
 	public static Query select(String entity) {
 		return new Query(entity);
 	}
 	
 	public static void logout() {
-		setCurrentUser(null);
+		setCurrentUser(null, null);
 	}
 	
 	public static BackbeamObject currentUser() {
@@ -148,7 +162,6 @@ public class Backbeam {
 	}
 	
 	private JSONObject socketioMessage(TreeMap<String, Object> params) {
-		sign(params, null);
 		JSONObject object = new JSONObject(params);
 		return object;
 	}
@@ -325,13 +338,16 @@ public class Backbeam {
 		}
 	}
 
-	protected static void setCurrentUser(BackbeamObject obj) {
+	protected static void setCurrentUser(BackbeamObject obj, String authCode) {
 		instance().currentUser = obj;
-		if (obj != null) {
+		if (obj != null && authCode != null) {
 			try {
+				HashMap<String, Object> map = new HashMap<String, Object>();
+				map.put("user", obj);
+				map.put("auth", authCode);
 				FileOutputStream fos = instance().context.openFileOutput(USER_FILE, Context.MODE_PRIVATE);
 				ObjectOutputStream oos = new ObjectOutputStream(fos);
-				oos.writeObject(obj);
+				oos.writeObject(map);
 				fos.close();
 			} catch(Exception e) {
 				throw new BackbeamException(e);
@@ -364,8 +380,15 @@ public class Backbeam {
 				try {
 					FileInputStream fis = instance().context.openFileInput(USER_FILE);
 					ObjectInputStream ois = new ObjectInputStream(fis);
-					BackbeamObject object = (BackbeamObject) ois.readObject();
-					instance().currentUser = object;
+					Object object = (BackbeamObject) ois.readObject();
+					if (object instanceof BackbeamObject) { // compatibility with old SDK versions
+						instance().currentUser = (BackbeamObject) object;
+					} else if (object instanceof HashMap) {
+						@SuppressWarnings("unchecked")
+						HashMap<String, Object> map = (HashMap<String, Object>) object;
+						instance().currentUser = (BackbeamObject) map.get("user");
+						instance().authCode = (String) map.get("auth");
+					}
 					fis.close();
 				} catch(FileNotFoundException e) {
 					// no user stored
@@ -474,11 +497,12 @@ public class Backbeam {
 	
 	private static BackbeamObject loginUserWithResponse(Json json) {
 		String id = json.get("id").asString();
+		String auth = json.get("auth").asString();
 		Json values = json.get("objects");
 		Map<String, BackbeamObject> objects = BackbeamObject.objectsFromValues(values, null);
 		BackbeamObject object = objects.get(id);
-		if (object != null) {
-			setCurrentUser(object);
+		if (object != null && auth != null) {
+			setCurrentUser(object, auth);
 		}
 		return object;
 	}
@@ -510,10 +534,58 @@ public class Backbeam {
 		});
 	}
 	
-	protected String sign(TreeMap<String, Object> params, RequestParams reqParams) {
-		return sign(params, reqParams, true);
+	protected void fillRequestParams(TreeMap<String, Object> params, RequestParams reqParams) {
+		for (String key : params.keySet()) {
+			Object value = params.get(key);
+			if (value instanceof List<?>) {
+				@SuppressWarnings("unchecked")
+				List<String> list = (List<String>) value;
+				Collections.sort(list);
+				reqParams.put(key, new ArrayList<String>(list));
+			} else {
+				reqParams.put(key, value.toString());
+			}
+		}
 	}
 	
+	protected String cacheString(TreeMap<String, Object> params) {
+		StringBuilder cacheKeyString = new StringBuilder();
+		for (String key : params.keySet()) {
+			Object value = params.get(key);
+			if (value instanceof List<?>) {
+				@SuppressWarnings("unchecked")
+				List<String> list = (List<String>) value;
+				Collections.sort(list);
+				for (String string : list) {
+					cacheKeyString.append("&"+key+"="+string);
+				}
+			} else {
+				cacheKeyString.append("&"+key+"="+value);
+			}
+		}
+
+		return cacheKeyString.toString();
+	}
+	
+	protected String signature(TreeMap<String, Object> params) {
+		StringBuilder parameterString = new StringBuilder();
+		for (String key : params.keySet()) {
+			Object value = params.get(key);
+			if (value instanceof List<?>) {
+				@SuppressWarnings("unchecked")
+				List<String> list = (List<String>) value;
+				Collections.sort(list);
+				for (String string : list) {
+					parameterString.append("&"+key+"="+string);
+				}
+			} else {
+				parameterString.append("&"+key+"="+value);
+			}
+		}
+		return Utils.hmacSha1(this.secretKey, parameterString.substring(1));
+	}
+	
+	/*
 	protected String sign(TreeMap<String, Object> params, RequestParams reqParams, boolean withNonce) {
 		params.put("key", this.sharedKey);
 		if (withNonce) {
@@ -551,6 +623,7 @@ public class Backbeam {
 
 		return cacheKeyString.toString();
 	}
+	*/
 	
 	protected String composeURL(String path) {
 		return protocol+"://api-"+env+"-"+project+"."+host+":"+port+path;
@@ -562,11 +635,19 @@ public class Backbeam {
 		if (params == null) params = new TreeMap<String, Object>();
 		params.put("method", method);
 		params.put("path", path);
+		params.put("key", this.sharedKey);
+		if (this.authCode != null) {
+			params.put("auth", this.authCode);
+		}
+		String cacheKeyString = cacheString(params);
+		
+		params.put("time", new Date().getTime()+"");
+		params.put("nonce", UUID.randomUUID().toString());
 		
 		RequestParams reqParams = new RequestParams();
-		String cacheKeyString = sign(params, reqParams);
-		params.remove("method");
-		params.remove("path");
+		String signature = signature(params);
+		reqParams.put("signature", signature);
+		fillRequestParams(params, reqParams);
 		
 		String cacheKey = null;
 		final boolean useCache = policy == FetchPolicy.LOCAL_ONLY
@@ -655,13 +736,14 @@ public class Backbeam {
 		}
 	}
 	
-	public static void enableGCM(String senderID) {
+	public static void enableGCM(String senderID, GCMCallback callback) {
     	Intent registrationIntent = new Intent("com.google.android.c2dm.intent.REGISTER");
     	// sets the app name in the intent
     	Context context = instance().context;
     	registrationIntent.putExtra("app", PendingIntent.getBroadcast(context, 0, new Intent(), 0));
     	registrationIntent.putExtra("sender", senderID);
     	context.startService(registrationIntent);
+    	instance().gcmCallback = callback;
 	}
 	
 	public static void setPushNotificationHandler(IntentCallback callback) {
@@ -864,6 +946,188 @@ public class Backbeam {
 				
 				callback.success(objects.get(id), isNew);
 			}
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
+	}
+	
+	private void requestController(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final ControllerRequestCallback callback) {
+		String url = null;
+		if (webVersion != null) {
+			url = protocol+"://web-"+webVersion+"-"+env+"-"+project+"."+host+":"+port;
+		} else {
+			url = protocol+"://web-"+env+"-"+project+"."+host+":"+port;
+		}
+		
+		if (params == null) params = new TreeMap<String, Object>();
+		
+		RequestParams reqParams = new RequestParams();
+		String cacheKeyString = cacheString(params);
+		fillRequestParams(params, reqParams);
+		
+		String cacheKey = null;
+		final boolean useCache = policy == FetchPolicy.LOCAL_ONLY
+						|| policy == FetchPolicy.LOCAL_AND_REMOTE
+						|| policy == FetchPolicy.LOCAL_OR_REMOTE;
+		
+		if (useCache) {
+			try {
+				cacheKey = Utils.hexString(Utils.sha1(cacheKeyString.toString().getBytes("UTF-8")));
+			} catch (UnsupportedEncodingException e) {
+				throw new RuntimeException(e); // should never happen
+			}
+			String json = null;
+			if (diskCache != null) {
+				try {
+					json = diskCache.get(cacheKey).getString(0);
+				} catch (Exception ex) {
+					// ignore
+					// ex.printStackTrace();
+				}
+			}
+			boolean read = false;
+			if (json != null) {
+				Json response = Json.loads(json);
+				if (response != null) {
+					read = true;
+					callback.success(null, null, response, true);
+					if (policy == FetchPolicy.LOCAL_OR_REMOTE)
+						return;
+					
+				}
+			}
+			if (policy == FetchPolicy.LOCAL_ONLY) {
+				if (!read) {
+					callback.failure(new BackbeamException("CachedDataNotFound"));
+				}
+				return;
+			}
+		}
+		
+		final String _cacheKey = cacheKey;
+		
+		// System.out.println("url = "+url);
+		AsyncHttpClient client = new AsyncHttpClient();
+		AsyncHttpResponseHandler handler = new AsyncHttpResponseHandler() {
+			
+			@Override
+			public void onSuccess(int status, Header[] headers, String json) {
+		        Json response = Json.loads(json);
+		        String auth = null;
+		        String user = null;
+		        
+		        for (Header header : headers) {
+		        	if (header.getName().equals("x-backbeam-auth")) {
+		        		auth = header.getValue();
+		        	} else if (header.getName().equals("x-backbeam-user")) {
+		        		user = header.getValue();
+		        	}
+				}
+		        
+		        callback.success(auth, user, response, false);
+		        
+		        if (useCache) {
+		            try {
+						DiskLruCache.Editor editor = diskCache.edit(_cacheKey);
+						editor.set(0, json);
+						editor.commit();
+						diskCache.flush();
+					} catch (IOException e) {
+						e.printStackTrace(); // TODO: handle error
+					}
+		        }
+		    }
+		    
+		    @Override
+		    public void onFailure(Throwable throwable, String arg1) {
+		    	callback.failure(new BackbeamException(throwable));
+		    }
+		    
+		    @Override
+		    public void onFinish() {
+		    }
+		};
+		
+	    if (this.authCode != null) {
+	    	client.addHeader("x-backbeam-auth", this.authCode);
+	    }
+	    if (this.httpAuth != null) {
+	    	client.setBasicAuth(this.project, this.httpAuth);
+	    }
+	    client.addHeader("x-backbeam-sdk", "android");
+		
+		if (method.equals("GET")) {
+			client.get(url, reqParams, handler);
+		} else if (method.equals("POST")) {
+			client.addHeader("Content-Type", "application/x-www-form-urlencoded");
+			client.post(url, reqParams, handler);
+		} else if (method.equals("PUT")) {
+			client.addHeader("Content-Type", "application/x-www-form-urlencoded");
+			client.put(url, reqParams, handler);
+		} else if (method.equals("DELETE")) {
+			reqParams.put("_method", "DELETE");
+			client.get(url, reqParams, handler);
+		} else {
+			callback.failure(new BackbeamException("Unknown HTTP method: "+method));
+		}
+	}
+	
+	public static void requestJsonFromController(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final RequestCallback callback) {
+		instance().requestController(method, path, params, policy, new ControllerRequestCallback() {
+			
+			@Override
+			public void success(String auth, String user, Json json, boolean fromCache) {
+				if (auth != null && user != null) {
+					if (auth.length() == 0) {
+						logout();
+					} else {
+						BackbeamObject _user = new BackbeamObject("user", user);
+						setCurrentUser(_user, auth);
+					}
+				}
+				
+				callback.success(json, fromCache);
+				
+			}
+			
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
+	}
+	
+	public static void requestObjectsFromController(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final FetchCallback callback) {
+		instance().requestController(method, path, params, policy, new ControllerRequestCallback() {
+			
+			@Override
+			public void success(String auth, String user, Json json, boolean fromCache) {
+		        Json values = json.get("objects");
+		        Json ids    = json.get("ids");
+				Map<String, BackbeamObject> objects = BackbeamObject.objectsFromValues(values, null);
+				
+				if (auth != null && user != null) {
+					if (auth.length() == 0) {
+						logout();
+					} else {
+						BackbeamObject _user = objects.get(user);
+						if (_user == null) {
+							_user = new BackbeamObject("user", user);
+						}
+						setCurrentUser(_user, auth);
+					}
+				}
+				
+		        List<BackbeamObject> list = new ArrayList<BackbeamObject>(ids.size());
+		        for (Json id : ids) {
+		        	BackbeamObject obj = objects.get(id.asString());
+		        	list.add(obj);
+		        }
+		        callback.success(list, json.get("count").asInt(), fromCache);
+			}
+			
 			@Override
 			public void failure(BackbeamException exception) {
 				callback.failure(exception);

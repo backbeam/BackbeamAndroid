@@ -57,6 +57,9 @@ public class GCMIntentService extends IntentService {
             // store registration ID on shared preferences
             // notify 3rd-party server about the registered ID
         	Backbeam.storeRegistrationId(registrationId);
+        	if (Backbeam.instance().gcmCallback != null) {
+        		Backbeam.instance().gcmCallback.deviceRegistered(registrationId);
+        	}
         }
             
         // unregistration succeeded
@@ -64,6 +67,9 @@ public class GCMIntentService extends IntentService {
             // get old registration ID from shared preferences
             // notify 3rd-party server about the unregistered ID
         	// TODO: System.out.println("unregistered");
+        	if (Backbeam.instance().gcmCallback != null) {
+        		Backbeam.instance().gcmCallback.deviceUnregistered(unregistered);
+        	}
         } 
             
         // last operation (registration or unregistration) returned an error;
@@ -71,9 +77,15 @@ public class GCMIntentService extends IntentService {
             if ("SERVICE_NOT_AVAILABLE".equals(error)) {
                // optionally retry using exponential back-off
                // (see Advanced Topics)
+            	if (Backbeam.instance().gcmCallback != null) {
+            		Backbeam.instance().gcmCallback.serviceNotAvailable();
+            	}
             } else {
                 // Unrecoverable error, log it
                 Log.i("TAG", "Received error: " + error);
+            	if (Backbeam.instance().gcmCallback != null) {
+            		Backbeam.instance().gcmCallback.unrecoverableError(error);
+            	}
             }
         }
     }
