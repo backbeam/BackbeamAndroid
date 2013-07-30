@@ -36,7 +36,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 
-import com.jakewharton.DiskLruCache;
+import com.jakewharton.disklrucache.DiskLruCache;
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
@@ -340,6 +340,12 @@ public class Backbeam {
 
 	protected static void setCurrentUser(BackbeamObject obj, String authCode) {
 		instance().currentUser = obj;
+
+		if (instance().context == null) {
+			// TODO: warn user
+			return;
+		}
+
 		if (obj != null && authCode != null) {
 			try {
 				HashMap<String, Object> map = new HashMap<String, Object>();

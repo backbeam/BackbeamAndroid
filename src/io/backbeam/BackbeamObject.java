@@ -289,7 +289,7 @@ public class BackbeamObject implements Serializable {
 					return;
 				}
 				String status = json.get("status").asString();
-				String auth   = json.get("auth").asString();
+				Json auth     = json.get("auth");
 				Json values   = json.get("objects");
 				String id     = json.get("id").asString();
 				if (status == null || values == null || id == null) {
@@ -306,7 +306,7 @@ public class BackbeamObject implements Serializable {
 				if (entity.equals("user") && method.equals("POST")) {
 					Backbeam.logout();
 					if (status.equals("Success") && auth != null) {
-						Backbeam.setCurrentUser(obj, auth);
+						Backbeam.setCurrentUser(obj, auth.asString());
 					}
 				}
 				callback.success(obj);
