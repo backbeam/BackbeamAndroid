@@ -97,6 +97,8 @@ public class Utils {
 			String s = location.getLatitude()+","+location.getLongitude()+","+location.getAltitude()+"|";
 			if (location.getAddress() != null) s += location.getAddress();
 			return s;
+		} else if (obj instanceof CollectionConstraint) {
+			return obj.toString();
 		}
 		return null;
 	}
