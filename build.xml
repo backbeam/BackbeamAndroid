@@ -89,8 +89,9 @@
     <!-- version-tag: 1 -->
     <import file="${sdk.dir}/tools/ant/build.xml" />
 
-    <target name="jar">
-        <jar destfile="BackbeamAndroid.jar" basedir="bin/classes/">
+    <target name="jar" depends="release">
+        <xmlproperty file="AndroidManifest.xml" prefix="mymanifest" collapseAttributes="true"/>
+        <jar destfile="BackbeamAndroid-${mymanifest.manifest.android:versionName}.jar" basedir="bin/classes/">
             <include name="io/**" />
         </jar>
     </target>
