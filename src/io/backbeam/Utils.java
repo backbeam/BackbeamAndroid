@@ -8,8 +8,10 @@ import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.List;
 
 import javax.crypto.Mac;
@@ -99,6 +101,15 @@ public class Utils {
 			return s;
 		} else if (obj instanceof CollectionConstraint) {
 			return obj.toString();
+		} else if (obj instanceof GregorianCalendar) {
+			GregorianCalendar value = (GregorianCalendar)obj;
+			int year = value.get(Calendar.YEAR);
+			int month = value.get(Calendar.MONTH) + 1;
+			int day = value.get(Calendar.DAY_OF_MONTH);
+			return String.format("%04d-%02d-%02d", year, month, day);
+		} else if (obj instanceof Boolean) {
+			Boolean value = (Boolean)obj;
+			return value.booleanValue() ? "1" : "0";
 		}
 		return null;
 	}

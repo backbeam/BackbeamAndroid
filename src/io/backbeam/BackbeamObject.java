@@ -2,7 +2,9 @@ package io.backbeam;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
@@ -125,6 +127,23 @@ public class BackbeamObject implements Serializable {
 						}
 					} else if (type.equals("r") && val.isString()) {
 						value = references.get(val.asString());
+					} else if (type.equals("j")) {
+						value = val;
+					} else if (type.equals("c") && val.isString()) {
+						String[] tokens = val.str().split("-");
+						if (tokens.length == 3) {
+							try {
+								GregorianCalendar calendar = new GregorianCalendar();
+								calendar.set(Calendar.YEAR, Integer.parseInt(tokens[0]));
+								calendar.set(Calendar.MONTH, Integer.parseInt(tokens[1]) - 1);
+								calendar.set(Calendar.DAY_OF_MONTH, Integer.parseInt(tokens[2]));
+								value = calendar;
+							} catch(NumberFormatException e) {
+								// should never happen, but we don't the app to crash just for this
+							}
+						}
+					} else if (type.equals("b") && val.isBoolean()) {
+						value = new Boolean(val.bool());
 					}
 					if (value != null) {
 						fields.put(field, value);
@@ -146,6 +165,10 @@ public class BackbeamObject implements Serializable {
 
 	public String getTwitterData(String key) {
 		return loginDataForProvider("tw", key);
+	}
+
+	public String getGooglePlusData(String key) {
+		return loginDataForProvider("gp", key);
 	}
 	
 	public Date getDate(String field) {
@@ -192,6 +215,48 @@ public class BackbeamObject implements Serializable {
 	public void setString(String field, String value) {
 		fields.put(field, value);
 		changes.put("set-"+field, value);
+	}
+	
+	public Json getJson(String field) {
+		Object o = fields.get(field);
+		if (o instanceof Json) return (Json) o;
+		return null;
+	}
+	
+	public void setJson(String field, Json value) {
+		fields.put(field, value);
+		changes.put("set-"+field, value.toString());
+	}
+	
+	public Boolean getBoolean(String field) {
+		Object o = fields.get(field);
+		if (o instanceof Boolean) return (Boolean) o;
+		return null;
+	}
+	
+	public void setBoolean(String field, Boolean value) {
+		fields.put(field, value);
+		changes.put("set-"+field, value.booleanValue() ? "1" : "0");
+	}
+	
+	public GregorianCalendar getDay(String field) {
+		Object o = fields.get(field);
+		if (o instanceof GregorianCalendar) return (GregorianCalendar) o;
+		return null;
+	}
+	
+	public void setDay(String field, GregorianCalendar value) {
+		fields.put(field, value);
+		int year = value.get(Calendar.YEAR);
+		int month = value.get(Calendar.MONTH) + 1;
+		int day = value.get(Calendar.DAY_OF_MONTH);
+		changes.put("set-"+field, String.format("%04d-%02d-%02d", year, month, day));
+	}
+	
+	public void setDay(String field, Date date) {
+		GregorianCalendar calendar = new GregorianCalendar();
+		calendar.setTime(date);
+		setDay(field, calendar);
 	}
 	
 	public BackbeamObject getObject(String field) {

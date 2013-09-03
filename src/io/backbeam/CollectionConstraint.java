@@ -72,6 +72,14 @@ public class CollectionConstraint {
 		addIdentifiers(identifiers, "email:");
 	}
 	
+	public void addGooglePlus(String identifier) {
+		addIdentifier(identifier, "gp:");
+	}
+	
+	public void addGooglePlus(List<String> identifiers) {
+		addIdentifiers(identifiers, "gp:");
+	}
+	
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 	    Iterator<String> iter = ids.iterator();

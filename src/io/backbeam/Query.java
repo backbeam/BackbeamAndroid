@@ -136,4 +136,45 @@ public class Query {
 		this.fetchPolicy = fetchPolicy;
 	}
 	
+	private void remove(TreeMap<String, Object> prms, final RemoveCallback callback) {
+		Backbeam.instance().perform("DELETE", "/data/"+entity, prms, fetchPolicy, new RequestCallback() {
+			@Override
+			public void success(Json response, boolean fromCache) {
+		        Json removed = response.get("removed");
+		        
+		        callback.success(removed.asInt());
+			}
+			
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
+	}
+	
+	public void remove(int limit, int offset, final RemoveCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		if (query != null) {
+			prms.put("q", query);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
+		}
+		prms.put("limit", Integer.toString(limit));
+		prms.put("offset", Integer.toString(offset));
+		remove(prms, callback);
+	}
+	
+	public void removeAll(final RemoveCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		if (query != null) {
+			prms.put("q", query);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
+		}
+		prms.put("limit", "all");
+		remove(prms, callback);
+	}
+
 }

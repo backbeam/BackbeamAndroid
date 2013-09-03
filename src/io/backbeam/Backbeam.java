@@ -186,6 +186,18 @@ public class Backbeam {
 		instance()._unsubscribeFromRealTimeEvents(eventName, listener);
 	}
 	
+	public void _unsubscribeFromAllRealTimeEvents() {
+		roomListeners.clear();
+		if (socketio != null && socketio.isConnected()) {
+			TreeMap<String, Object> params = new TreeMap<String, Object>();
+			socketio.emit("unsubscribe-all", socketioMessage(params));
+		}
+	}
+	
+	public static void unsubscribeFromAllRealTimeEvents() {
+		instance()._unsubscribeFromAllRealTimeEvents();
+	}
+	
 	public void _sendRealTimeEvent(String eventName, Map<String, String> message) {
 		if (socketio != null && socketio.isConnected()) {
 			String room = roomName(eventName);
@@ -228,6 +240,10 @@ public class Backbeam {
 	
 	public static void removeRealTimeConnectionListener(RealTimeConnectionListener listener) {
 		instance().realTimeListeners.remove(listener);
+	}
+	
+	public static void removeAllRealTimeConnectionListeners() {
+		instance().realTimeListeners.clear();
 	}
 	
 	private void fireConnecting() {
@@ -881,6 +897,24 @@ public class Backbeam {
 		});
 	}
 	
+	public static void googlePlusLogin(String accessToken, String joins, Object[] params, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("access_token", accessToken);
+		if (joins != null) {
+			prms.put("joins", joins);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
+		}
+		socialSignup("googleplus", prms, callback);
+	}
+	
+	public static void googlePlusLogin(String accessToken, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("access_token", accessToken);
+		socialSignup("googleplus", prms, callback);
+	}
+	
 	public static void facebookLogin(String accessToken, String joins, Object[] params, final SignupCallback callback) {
 		TreeMap<String, Object> prms = new TreeMap<String, Object>();
 		prms.put("access_token", accessToken);
@@ -1020,6 +1054,7 @@ public class Backbeam {
 			
 			@Override
 			public void onSuccess(int status, Header[] headers, String json) {
+				// TODO: json can be null
 		        Json response = Json.loads(json);
 		        String auth = null;
 		        String user = null;
