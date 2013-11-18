@@ -1048,7 +1048,8 @@ public class Backbeam {
 		
 		final String _cacheKey = cacheKey;
 		
-		// System.out.println("url = "+url);
+		url += path;
+		
 		AsyncHttpClient client = new AsyncHttpClient();
 		AsyncHttpResponseHandler handler = new AsyncHttpResponseHandler() {
 			
