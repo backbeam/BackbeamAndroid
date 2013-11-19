@@ -1055,8 +1055,10 @@ public class Backbeam {
 			
 			@Override
 			public void onSuccess(int status, Header[] headers, String json) {
-				// TODO: json can be null
-		        Json response = Json.loads(json);
+		        Json response = null;
+		        if (json != null) {
+		            response = Json.loads(json);
+		        }
 		        String auth = null;
 		        String user = null;
 		        
@@ -1146,6 +1148,11 @@ public class Backbeam {
 			
 			@Override
 			public void success(String auth, String user, Json json, boolean fromCache) {
+				if (json == null) { // empty response
+					callback.success(new ArrayList<BackbeamObject>(), 0, fromCache);
+					return;
+				}
+				
 		        Json values = json.get("objects");
 		        Json ids    = json.get("ids");
 				Map<String, BackbeamObject> objects = BackbeamObject.objectsFromValues(values, null);
