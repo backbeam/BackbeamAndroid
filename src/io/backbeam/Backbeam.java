@@ -356,6 +356,7 @@ public class Backbeam {
 
 	protected static void setCurrentUser(BackbeamObject obj, String authCode) {
 		instance().currentUser = obj;
+		instance().authCode = authCode;
 
 		if (instance().context == null) {
 			// TODO: warn user
