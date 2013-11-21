@@ -5,6 +5,7 @@ import io.socket.IOCallback;
 import io.socket.SocketIO;
 import io.socket.SocketIOException;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -12,8 +13,10 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -582,6 +585,8 @@ public class Backbeam {
 				for (String string : list) {
 					cacheKeyString.append("&"+key+"="+string);
 				}
+			} else if (value instanceof InputStream || value instanceof File) {
+				// ignore
 			} else {
 				cacheKeyString.append("&"+key+"="+value);
 			}
@@ -1019,25 +1024,26 @@ public class Backbeam {
 			} catch (UnsupportedEncodingException e) {
 				throw new RuntimeException(e); // should never happen
 			}
-			String json = null;
+			byte[] data = null;
 			if (diskCache != null) {
 				try {
-					json = diskCache.get(cacheKey).getString(0);
+					DiskLruCache.Snapshot snapshot = diskCache.get(cacheKey);
+					ByteArrayOutputStream out = new ByteArrayOutputStream();
+					InputStream in = snapshot.getInputStream(0);
+					byte[] buffer = new byte[1024*10];
+					int read = 0;
+					while ((read = in.read(buffer)) != -1) {
+						out.write(buffer, 0, read);
+					}
+					data = out.toByteArray();
 				} catch (Exception ex) {
 					// ignore
 					// ex.printStackTrace();
 				}
 			}
 			boolean read = false;
-			if (json != null) {
-				Json response = Json.loads(json);
-				if (response != null) {
-					read = true;
-					callback.success(null, null, response, true);
-					if (policy == FetchPolicy.LOCAL_OR_REMOTE)
-						return;
-					
-				}
+			if (data != null) {
+				callback.success(null, null, data, true);
 			}
 			if (policy == FetchPolicy.LOCAL_ONLY) {
 				if (!read) {
@@ -1050,16 +1056,13 @@ public class Backbeam {
 		final String _cacheKey = cacheKey;
 		
 		url += path;
+		System.out.println("url = "+url);
 		
 		AsyncHttpClient client = new AsyncHttpClient();
 		AsyncHttpResponseHandler handler = new AsyncHttpResponseHandler() {
 			
 			@Override
-			public void onSuccess(int status, Header[] headers, String json) {
-		        Json response = null;
-		        if (json != null) {
-		            response = Json.loads(json);
-		        }
+			public void onSuccess(int status, Header[] headers, byte[] body) {
 		        String auth = null;
 		        String user = null;
 		        
@@ -1071,12 +1074,13 @@ public class Backbeam {
 		        	}
 				}
 		        
-		        callback.success(auth, user, response, false);
+		        callback.success(auth, user, body, false);
 		        
 		        if (useCache) {
 		            try {
 						DiskLruCache.Editor editor = diskCache.edit(_cacheKey);
-						editor.set(0, json);
+						OutputStream out = editor.newOutputStream(0);
+						out.write(body);
 						editor.commit();
 						diskCache.flush();
 					} catch (IOException e) {
@@ -1119,17 +1123,54 @@ public class Backbeam {
 		}
 	}
 	
-	public static void requestJsonFromController(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final RequestCallback callback) {
+	public static void requestDataFromController(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final RequestDataCallback callback) {
 		instance().requestController(method, path, params, policy, new ControllerRequestCallback() {
 			
 			@Override
-			public void success(String auth, String user, Json json, boolean fromCache) {
+			public void success(String auth, String user, byte[] body, boolean fromCache) {
 				if (auth != null && user != null) {
 					if (auth.length() == 0) {
 						logout();
 					} else {
 						BackbeamObject _user = new BackbeamObject("user", user);
 						setCurrentUser(_user, auth);
+					}
+				}
+				
+				callback.success(body, fromCache);
+				
+			}
+			
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
+	}
+	
+	public static void requestJsonFromController(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final RequestCallback callback) {
+		instance().requestController(method, path, params, policy, new ControllerRequestCallback() {
+			
+			@Override
+			public void success(String auth, String user, byte[] body, boolean fromCache) {
+				if (auth != null && user != null) {
+					if (auth.length() == 0) {
+						logout();
+					} else {
+						BackbeamObject _user = new BackbeamObject("user", user);
+						setCurrentUser(_user, auth);
+					}
+				}
+				
+				Json json = null;
+				if (body != null) {
+					String bodyString;
+					try {
+						bodyString = new String(body, "UTF-8");
+						json = Json.loads(bodyString);
+					} catch (Exception e) {
+						callback.failure(new BackbeamException(e));
+						return;
 					}
 				}
 				
@@ -1148,9 +1189,19 @@ public class Backbeam {
 		instance().requestController(method, path, params, policy, new ControllerRequestCallback() {
 			
 			@Override
-			public void success(String auth, String user, Json json, boolean fromCache) {
-				if (json == null) { // empty response
-					callback.success(new ArrayList<BackbeamObject>(), 0, fromCache);
+			public void success(String auth, String user, byte[] body, boolean fromCache) {
+				Json json = null;
+				if (body != null) {
+					String bodyString;
+					try {
+						bodyString = new String(body, "UTF-8");
+						json = Json.loads(bodyString);
+					} catch (Exception e) {
+						callback.failure(new BackbeamException(e));
+						return;
+					}
+				} else { // empty response
+					callback.failure(new BackbeamException("Empty server response"));
 					return;
 				}
 				
