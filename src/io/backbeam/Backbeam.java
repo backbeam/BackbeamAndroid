@@ -60,6 +60,7 @@ public class Backbeam {
 	private IntentCallback pushHandler;
 	protected GCMCallback gcmCallback;
 	private String registrationId;
+	private Json oldRegistrationIds;
 	private DiskLruCache diskCache;
 	
 	private String webVersion;
@@ -74,6 +75,7 @@ public class Backbeam {
 	private static Backbeam instance;
 	
 	private Backbeam() {
+		oldRegistrationIds = Json.list();
 		roomListeners = new HashMap<String, List<RealTimeEventListener>>();
 		realTimeListeners = new ArrayList<RealTimeConnectionListener>();
 		Logger log = Logger.getLogger("io.socket");
@@ -428,7 +430,12 @@ public class Backbeam {
 				try {
 					FileInputStream fis = instance().context.openFileInput(REGISTRATION_ID_FILE);
 					DataInputStream dis = new DataInputStream(fis);
-					instance().registrationId = dis.readUTF();
+					if (dis.available() > 0) {
+						instance().registrationId = dis.readUTF();
+					}
+					while (dis.available() > 0) {
+						instance().oldRegistrationIds.add(dis.readUTF());
+					}
 					fis.close();
 				} catch(FileNotFoundException e) {
 					// no registration id stored
@@ -723,6 +730,12 @@ public class Backbeam {
 		AsyncHttpResponseHandler handler = new AsyncHttpResponseHandler() {
 		    @Override
 		    public void onSuccess(String json) {
+		    	
+				if (oldRegistrationIds.size() > 0) {
+					oldRegistrationIds = Json.list();
+					Backbeam.storeRegistrationId(instance().registrationId); // saves the file
+				}
+				
 		        Json response = Json.loads(json);
 		        callback.success(response, false);
 		        
@@ -748,6 +761,13 @@ public class Backbeam {
 		    }
 		};
 		
+	    if (this.oldRegistrationIds.size() > 0) {
+	    	client.addHeader("x-backbeam-old-tokens", oldRegistrationIds.toString());
+	    	if (this.registrationId != null) {
+		    	client.addHeader("x-backbeam-current-token", "gcm="+this.registrationId);
+	    	}
+	    }
+	    
 		if (method.equals("GET")) {
 			client.get(url, reqParams, handler);
 		} else if (method.equals("POST")) {
@@ -786,12 +806,21 @@ public class Backbeam {
 	}
 	
 	static void storeRegistrationId(String registrationID) {
+		String current = instance().registrationId;
+		if (current != null && !current.equals(registrationID)) {
+			instance().oldRegistrationIds.add(current);
+		}
 		instance().registrationId = registrationID;
 		FileOutputStream fos = null;
 		try {
 			fos = instance().context.openFileOutput(REGISTRATION_ID_FILE, Context.MODE_PRIVATE);
 			DataOutputStream dos = new DataOutputStream(fos);
-			dos.writeUTF(registrationID);
+			if (registrationID != null) {
+				dos.writeUTF(registrationID);
+			}
+			for (Json oldRegistrationId : instance().oldRegistrationIds) {
+				dos.writeUTF(oldRegistrationId.str());
+			}
 			dos.close();
 		} catch (Exception e) {
 			// TODO
@@ -1056,13 +1085,18 @@ public class Backbeam {
 		final String _cacheKey = cacheKey;
 		
 		url += path;
-		System.out.println("url = "+url);
 		
 		AsyncHttpClient client = new AsyncHttpClient();
 		AsyncHttpResponseHandler handler = new AsyncHttpResponseHandler() {
 			
 			@Override
 			public void onSuccess(int status, Header[] headers, byte[] body) {
+				
+				if (oldRegistrationIds.size() > 0) {
+					oldRegistrationIds = Json.list();
+					Backbeam.storeRegistrationId(instance().registrationId); // saves the file
+				}
+				
 		        String auth = null;
 		        String user = null;
 		        
@@ -1104,6 +1138,12 @@ public class Backbeam {
 	    }
 	    if (this.httpAuth != null) {
 	    	client.setBasicAuth(this.project, this.httpAuth);
+	    }
+	    if (this.oldRegistrationIds.size() > 0) {
+	    	client.addHeader("x-backbeam-old-tokens", oldRegistrationIds.toString());
+	    	if (this.registrationId != null) {
+		    	client.addHeader("x-backbeam-current-token", "gcm="+this.registrationId);
+	    	}
 	    }
 	    client.addHeader("x-backbeam-sdk", "android");
 		
