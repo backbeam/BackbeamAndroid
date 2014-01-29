@@ -575,10 +575,30 @@ public class Backbeam {
 				List<String> list = (List<String>) value;
 				Collections.sort(list);
 				reqParams.put(key, new ArrayList<String>(list));
+			} else if (value instanceof InputStream) {
+				reqParams.put(key, (InputStream)value, key);
+			} else if (value instanceof File) {
+				try {
+					reqParams.put(key, (File)value);
+				} catch (FileNotFoundException e) {
+					throw new RuntimeException(e);
+				}
+			} else if (value instanceof FileUpload) {
+				FileUpload upload = (FileUpload)value;
+				if (upload.getFile() != null) {
+					try {
+						reqParams.put(key, upload.getFile(), upload.getMimeType());
+					} catch (FileNotFoundException e) {
+						throw new RuntimeException(e);
+					}
+				} else if (upload.getInputStream() != null) {
+					reqParams.put(key, upload.getInputStream(), upload.getFilename(), upload.getMimeType());
+				}
 			} else {
 				reqParams.put(key, value.toString());
 			}
 		}
+		reqParams.setHttpEntityIsRepeatable(true);
 	}
 	
 	protected String cacheString(TreeMap<String, Object> params) {
@@ -1124,7 +1144,8 @@ public class Backbeam {
 		    }
 		    
 		    @Override
-		    public void onFailure(Throwable throwable, String arg1) {
+		    public void onFailure(Throwable throwable, String body) {
+		    	// TODO: parse body
 		    	callback.failure(new BackbeamException(throwable));
 		    }
 		    
