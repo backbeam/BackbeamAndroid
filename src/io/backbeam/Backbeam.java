@@ -1051,16 +1051,18 @@ public class Backbeam {
 	private void requestController(String method, String path, TreeMap<String, Object> params, FetchPolicy policy, final ControllerRequestCallback callback) {
 		String url = null;
 		if (webVersion != null) {
-			url = protocol+"://web-"+webVersion+"-"+env+"-"+project+"."+host+":"+port;
+			url = "://web-"+webVersion+"-"+env+"-"+project+"."+host+":"+port;
 		} else {
-			url = protocol+"://web-"+env+"-"+project+"."+host+":"+port;
+			url = "://web-"+env+"-"+project+"."+host+":"+port;
 		}
+		url += path;
 		
 		if (params == null) params = new TreeMap<String, Object>();
-		
 		RequestParams reqParams = new RequestParams();
-		String cacheKeyString = cacheString(params);
+		String cacheKeyString = method+"\n"+url+"\n"+cacheString(params);
 		fillRequestParams(params, reqParams);
+		
+		url = protocol+url;
 		
 		String cacheKey = null;
 		final boolean useCache = policy == FetchPolicy.LOCAL_ONLY
@@ -1103,8 +1105,6 @@ public class Backbeam {
 		}
 		
 		final String _cacheKey = cacheKey;
-		
-		url += path;
 		
 		AsyncHttpClient client = new AsyncHttpClient();
 		AsyncHttpResponseHandler handler = new AsyncHttpResponseHandler() {
