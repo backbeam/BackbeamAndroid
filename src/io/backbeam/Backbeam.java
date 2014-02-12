@@ -1144,9 +1144,27 @@ public class Backbeam {
 		    }
 		    
 		    @Override
-		    public void onFailure(Throwable throwable, String body) {
-		    	// TODO: parse body
-		    	callback.failure(new BackbeamException(throwable));
+		    public void onFailure(int statusCode, Header[] headers, byte[] body, Throwable error) {
+				Json json = null;
+				if (body != null) {
+					String bodyString;
+					try {
+						bodyString = new String(body, "UTF-8");
+						json = Json.loads(bodyString);
+						String status = json.get("status").str();
+						String errorMessage = json.get("errorMessage").str();
+						if (errorMessage == null) {
+							callback.failure(new BackbeamException(status));
+						} else {
+							callback.failure(new BackbeamException(status, errorMessage));
+						}
+					} catch (Exception e) {
+						callback.failure(new BackbeamException(error));
+						return;
+					}
+				} else {
+					callback.failure(new BackbeamException(error));
+				}
 		    }
 		    
 		    @Override
