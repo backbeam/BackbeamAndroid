@@ -570,6 +570,14 @@ public class Backbeam {
 	protected void fillRequestParams(TreeMap<String, Object> params, RequestParams reqParams) {
 		for (String key : params.keySet()) {
 			Object value = params.get(key);
+			if (value instanceof Object[]) {
+				Object[] arr = (Object[])value;
+				List<String> list = new ArrayList<String>(arr.length);
+				for (Object o : arr) {
+					list.add(o.toString());
+				}
+				value = list;
+			}
 			if (value instanceof List<?>) {
 				@SuppressWarnings("unchecked")
 				List<String> list = (List<String>) value;
@@ -1151,12 +1159,16 @@ public class Backbeam {
 					try {
 						bodyString = new String(body, "UTF-8");
 						json = Json.loads(bodyString);
-						String status = json.get("status").str();
-						String errorMessage = json.get("errorMessage").str();
-						if (errorMessage == null) {
-							callback.failure(new BackbeamException(status));
+						Json status = json.get("status");
+						if (status != null) {
+							Json errorMessage = json.get("errorMessage");
+							if (errorMessage == null) {
+								callback.failure(new BackbeamException(status.str()));
+							} else {
+								callback.failure(new BackbeamException(status.str(), errorMessage.str()));
+							}
 						} else {
-							callback.failure(new BackbeamException(status, errorMessage));
+							callback.failure(new BackbeamException(error));
 						}
 					} catch (Exception e) {
 						callback.failure(new BackbeamException(error));
