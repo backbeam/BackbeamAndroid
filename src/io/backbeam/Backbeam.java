@@ -960,7 +960,43 @@ public class Backbeam {
 		});
 	}
 	
-	public static void googlePlusLogin(String accessToken, String joins, Object[] params, final SignupCallback callback) {
+	public static void gitHubSignup(String accessToken, String joins, Object[] params, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("access_token", accessToken);
+		if (joins != null) {
+			prms.put("joins", joins);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
+		}
+		socialSignup("github", prms, callback);
+	}
+	
+	public static void gitHubSignup(String accessToken, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("access_token", accessToken);
+		socialSignup("github", prms, callback);
+	}
+	
+	public static void linkedInSignup(String accessToken, String joins, Object[] params, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("access_token", accessToken);
+		if (joins != null) {
+			prms.put("joins", joins);
+			if (params != null) {
+				prms.put("params", Utils.stringsFromParams(params));
+			}
+		}
+		socialSignup("linkedin", prms, callback);
+	}
+	
+	public static void linkedInSignup(String accessToken, final SignupCallback callback) {
+		TreeMap<String, Object> prms = new TreeMap<String, Object>();
+		prms.put("access_token", accessToken);
+		socialSignup("linkedin", prms, callback);
+	}
+	
+	public static void googlePlusSignup(String accessToken, String joins, Object[] params, final SignupCallback callback) {
 		TreeMap<String, Object> prms = new TreeMap<String, Object>();
 		prms.put("access_token", accessToken);
 		if (joins != null) {
@@ -972,13 +1008,13 @@ public class Backbeam {
 		socialSignup("googleplus", prms, callback);
 	}
 	
-	public static void googlePlusLogin(String accessToken, final SignupCallback callback) {
+	public static void googlePlusSignup(String accessToken, final SignupCallback callback) {
 		TreeMap<String, Object> prms = new TreeMap<String, Object>();
 		prms.put("access_token", accessToken);
 		socialSignup("googleplus", prms, callback);
 	}
 	
-	public static void facebookLogin(String accessToken, String joins, Object[] params, final SignupCallback callback) {
+	public static void facebookSignup(String accessToken, String joins, Object[] params, final SignupCallback callback) {
 		TreeMap<String, Object> prms = new TreeMap<String, Object>();
 		prms.put("access_token", accessToken);
 		if (joins != null) {
@@ -990,13 +1026,13 @@ public class Backbeam {
 		socialSignup("facebook", prms, callback);
 	}
 	
-	public static void facebookLogin(String accessToken, final SignupCallback callback) {
+	public static void facebookSignup(String accessToken, final SignupCallback callback) {
 		TreeMap<String, Object> prms = new TreeMap<String, Object>();
 		prms.put("access_token", accessToken);
 		socialSignup("facebook", prms, callback);
 	}
 	
-	public static void twitterLogin(String oauthToken, String oauthTokenSecret, String joins, Object[] params, final SignupCallback callback) {
+	public static void twitterSignup(String oauthToken, String oauthTokenSecret, String joins, Object[] params, final SignupCallback callback) {
 		TreeMap<String, Object> prms = new TreeMap<String, Object>();
 		prms.put("oauth_token", oauthToken);
 		prms.put("oauth_token_secret", oauthTokenSecret);
@@ -1009,7 +1045,7 @@ public class Backbeam {
 		socialSignup("twitter", prms, callback);
 	}
 	
-	public static void twitterLogin(String oauthToken, String oauthTokenSecret, final SignupCallback callback) {
+	public static void twitterSignup(String oauthToken, String oauthTokenSecret, final SignupCallback callback) {
 		TreeMap<String, Object> prms = new TreeMap<String, Object>();
 		prms.put("oauth_token", oauthToken);
 		prms.put("oauth_token_secret", oauthTokenSecret);
