@@ -833,6 +833,10 @@ public class Backbeam {
 		}
 	}
 	
+	public static String registrationId() {
+		return instance().registrationId;
+	}
+	
 	static void storeRegistrationId(String registrationID) {
 		String current = instance().registrationId;
 		if (current != null && !current.equals(registrationID)) {

@@ -197,6 +197,12 @@ public class BackbeamObject implements Serializable {
 			setLocation(field, (Location) value);
 		} else if (value instanceof BackbeamObject) {
 			setObject(field, (BackbeamObject) value);
+		} else if (value instanceof Boolean) {
+			setBoolean(field, (Boolean) value);
+		} else if (value instanceof Json) {
+			setJson(field, (Json) value);
+		} else if (value instanceof GregorianCalendar) {
+			setDay(field, (GregorianCalendar) value);
 		}
 	}
 	

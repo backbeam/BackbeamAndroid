@@ -1,6 +1,10 @@
 Changelog
 =========
 
+**Version 0.12.2 - Apr 2, 2014**
+
+Added utility method `Backbeam.registrationId()` to be able to access the device token for push notifications at any time.
+
 **Version 0.12.1 - Feb 21, 2014**
 
 `JoinResult` now is serializable. This prevents the problem of serializating the user session when `Backbeam.login()` is used with a join BQL.
