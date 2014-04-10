@@ -291,32 +291,15 @@ public class Backbeam {
 		}
 	}
 	
-	private void reconnectAfter() {
-		// System.out.println("trying to reconnect after "+retry*retry+" seconds");
-		if (true) return;
-		new Timer().schedule(new TimerTask() {
-			@Override
-			public void run() {
-				Looper.prepare();
-				System.out.println("reconnecting");
-				reconnect();
-			}
-		}, retry*retry*1000);
-		retry++;
-	}
-	
 	private void reconnect() {
-		fireConnecting();
-		String uri = protocol+"://api-"+env+"-"+project+"."+host+":"+(port == 443 ? 80 : port);
-		System.out.println("SocketIOClient.connect");
+		// String url  = protocol+"://api-"+env+"-"+project+"."+host+":"+port;
+		String uri = "http://api-"+env+"-"+project+"."+host+":"+(port == 443 ? 80 : port);
 		SocketIOClient.connect(uri, new ConnectCallback() {
 			
 			@Override
 			public void onConnectCompleted(Exception ex, SocketIOClient client) {
-				System.out.println("onConnectCompleted");
 				if (ex != null) {
 					fireFailed(ex);
-					reconnectAfter();
 					return;
 				}
 				if (socketio != null) {
@@ -330,9 +313,6 @@ public class Backbeam {
 					@Override
 					public void onDisconnect(Exception e) {
 						fireDisconnected();
-						if (socketio != null) { // not disconnected on purpose
-							reconnectAfter();
-						}
 					}
 				});
 				
@@ -341,7 +321,6 @@ public class Backbeam {
 					@Override
 					public void onError(String error) {
 						fireFailed(new BackbeamException(error));
-						reconnectAfter();
 					}
 				});
 				
