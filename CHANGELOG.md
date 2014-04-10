@@ -1,6 +1,10 @@
 Changelog
 =========
 
+**Version 0.12.3 - Apr 10, 2014**
+
+Added `BackbeamObject.uploadFile()` to upload files using client-side logic (API keys).
+
 **Version 0.12.2 - Apr 2, 2014**
 
 Added utility method `Backbeam.registrationId()` to be able to access the device token for push notifications at any time.

@@ -641,6 +641,8 @@ public class Backbeam {
 				for (String string : list) {
 					parameterString.append("&"+key+"="+string);
 				}
+			} else if (value instanceof FileUpload) {
+				// ignore
 			} else {
 				parameterString.append("&"+key+"="+value);
 			}
@@ -780,8 +782,24 @@ public class Backbeam {
 		    }
 		    
 		    @Override
-		    public void onFailure(Throwable throwable, String arg1) {
-		    	callback.failure(new BackbeamException(throwable));
+		    public void onFailure(Throwable error, String bodyString) {
+				try {
+					Json json = Json.loads(bodyString);
+					Json status = json.get("status");
+					if (status != null) {
+						Json errorMessage = json.get("errorMessage");
+						if (errorMessage == null) {
+							callback.failure(new BackbeamException(status.str()));
+						} else {
+							callback.failure(new BackbeamException(status.str(), errorMessage.str()));
+						}
+					} else {
+						callback.failure(new BackbeamException(error));
+					}
+				} catch (Exception e) {
+					callback.failure(new BackbeamException(error));
+					return;
+				}
 		    }
 		    
 		    @Override

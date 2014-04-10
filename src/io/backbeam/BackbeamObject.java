@@ -492,6 +492,39 @@ public class BackbeamObject implements Serializable {
 	    return this.id == null;
 	}
 	
+	public void uploadFile(FileUpload fileUpload, final ObjectCallback callback) {
+		String path = id == null ? "/data/file/upload" : "/data/file/upload/"+id;
+		final String method = id == null ? "POST" : "PUT";
+		
+		final BackbeamObject obj = this;
+		TreeMap<String, Object> params = new TreeMap<String, Object>(changes);
+		params.put("file", fileUpload);
+		Backbeam.instance().perform(method, path, params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json json, boolean fromCache) {
+				obj.changes = new TreeMap<String, Object>();
+				if (!json.isMap()) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				String status = json.get("status").asString();
+				Json values   = json.get("objects");
+				String id     = json.get("id").asString();
+				if (status == null || values == null || id == null) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				obj.id = id;
+				Map<String, BackbeamObject> objects = new HashMap<String, BackbeamObject>();
+				objects.put(id, obj);
+				BackbeamObject.objectsFromValues(values, objects);
+				callback.success(obj);
+			}
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
+	}
+	
 	public String composeFileURL(TreeMap<String, Object> params) {
 		String path = "/data/file/download/"+this.id+"/"+getNumber("version");
 		if (params == null) {
