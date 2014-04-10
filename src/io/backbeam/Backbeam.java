@@ -1,10 +1,5 @@
 package io.backbeam;
 
-import io.socket.IOAcknowledge;
-import io.socket.IOCallback;
-import io.socket.SocketIO;
-import io.socket.SocketIOException;
-
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -26,20 +21,33 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.http.Header;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Handler;
+import android.os.Looper;
 
 import com.jakewharton.disklrucache.DiskLruCache;
+import com.koushikdutta.async.http.socketio.Acknowledge;
+import com.koushikdutta.async.http.socketio.ConnectCallback;
+import com.koushikdutta.async.http.socketio.DisconnectCallback;
+import com.koushikdutta.async.http.socketio.ErrorCallback;
+import com.koushikdutta.async.http.socketio.EventCallback;
+import com.koushikdutta.async.http.socketio.JSONCallback;
+import com.koushikdutta.async.http.socketio.SocketIOClient;
+import com.koushikdutta.async.http.socketio.StringCallback;
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.RequestParams;
@@ -68,7 +76,8 @@ public class Backbeam {
 	
 	private BackbeamObject currentUser;
 	private String authCode;
-	private SocketIO socketio;
+	private SocketIOClient socketio;
+	private int retry = 0;
 	private Map<String, List<RealTimeEventListener>> roomListeners;
 	private List<RealTimeConnectionListener> realTimeListeners;
 	
@@ -78,7 +87,7 @@ public class Backbeam {
 		oldRegistrationIds = Json.list();
 		roomListeners = new HashMap<String, List<RealTimeEventListener>>();
 		realTimeListeners = new ArrayList<RealTimeConnectionListener>();
-		Logger log = Logger.getLogger("io.socket");
+		Logger log = Logger.getLogger("com.codebutler");
 		log.setLevel(Level.OFF);
 	}
 	
@@ -166,9 +175,12 @@ public class Backbeam {
 		}
 	}
 	
-	private JSONObject socketioMessage(TreeMap<String, Object> params) {
+	private JSONArray socketioMessage(TreeMap<String, Object> params) {
 		JSONObject object = new JSONObject(params);
-		return object;
+		ArrayList<JSONObject> arrayList = new ArrayList<JSONObject>();
+		arrayList.add(object);
+		JSONArray array = new JSONArray(arrayList);
+		return array;
 	}
 	
 	public void _unsubscribeFromRealTimeEvents(String eventName, RealTimeEventListener listener) {
@@ -224,7 +236,10 @@ public class Backbeam {
 	}
 	
 	private void _enableRealTime() {
-		if (socketio != null) return;
+		if (socketio != null) {
+			if (socketio.isConnected()) return;
+			socketio = null;
+		}
 		reconnect();
 	}
 	
@@ -234,8 +249,9 @@ public class Backbeam {
 	
 	private void _disableRealTime() {
 		if (socketio != null) {
-			socketio.disconnect();
+			SocketIOClient client = socketio;
 			socketio = null;
+			client.disconnect();
 		}
 	}
 	
@@ -275,88 +291,126 @@ public class Backbeam {
 		}
 	}
 	
+	private void reconnectAfter() {
+		// System.out.println("trying to reconnect after "+retry*retry+" seconds");
+		if (true) return;
+		new Timer().schedule(new TimerTask() {
+			@Override
+			public void run() {
+				Looper.prepare();
+				System.out.println("reconnecting");
+				reconnect();
+			}
+		}, retry*retry*1000);
+		retry++;
+	}
+	
 	private void reconnect() {
-		// https://github.com/Gottox/socket.io-java-client
 		fireConnecting();
-		// TODO: SSL is not working. See https://github.com/Gottox/socket.io-java-client/issues/14
-		// String url  = protocol+"://api-"+env+"-"+project+"."+host+":"+port;
-		String url = "http://api-"+env+"-"+project+"."+host+":"+(port == 443 ? 80 : port);
-		try {
-//			if ("https".equals(protocol)) {
-//				SocketIO.setDefaultSSLSocketFactory(SSLContext.getInstance("Default"));
-//			}
-			socketio = new SocketIO(url, new IOCallback() {
-				
-				@Override
-				public void onMessage(JSONObject json, IOAcknowledge ioa) {
+		String uri = protocol+"://api-"+env+"-"+project+"."+host+":"+(port == 443 ? 80 : port);
+		System.out.println("SocketIOClient.connect");
+		SocketIOClient.connect(uri, new ConnectCallback() {
+			
+			@Override
+			public void onConnectCompleted(Exception ex, SocketIOClient client) {
+				System.out.println("onConnectCompleted");
+				if (ex != null) {
+					fireFailed(ex);
+					reconnectAfter();
+					return;
 				}
-				
-				@Override
-				public void onMessage(String string, IOAcknowledge ioa) {
+				if (socketio != null) {
+					socketio.disconnect(); // if there is a previous instance
 				}
+				retry = 0;
+				socketio = client;
 				
-				@Override
-				public void onError(SocketIOException error) {
-					fireFailed(error);
-					// reconnect();
-				}
-				
-				@Override
-				public void onDisconnect() {
-					fireDisconnected();
-				}
-				
-				@Override
-				public void onConnect() {
-					for (String room : roomListeners.keySet()) {
-						TreeMap<String, Object> params = new TreeMap<String, Object>();
-						params.put("room", room);
-						socketio.emit("subscribe", socketioMessage(params));
-					}
+				client.setDisconnectCallback(new DisconnectCallback() {
 					
-					fireConnected();
-				}
+					@Override
+					public void onDisconnect(Exception e) {
+						fireDisconnected();
+						if (socketio != null) { // not disconnected on purpose
+							reconnectAfter();
+						}
+					}
+				});
 				
-				@Override
-				public void on(String event, IOAcknowledge ioa, Object... args) {
-					if (args.length > 0 && args[0].getClass() == JSONObject.class) {
-						JSONObject message = (JSONObject) args[0];
+				client.setErrorCallback(new ErrorCallback() {
+					
+					@Override
+					public void onError(String error) {
+						fireFailed(new BackbeamException(error));
+						reconnectAfter();
+					}
+				});
+				
+				client.addListener("msg", new EventCallback() {
+					
+					@Override
+					public void onEvent(String event, JSONArray args,
+							Acknowledge acknowledge) {
+						
 						try {
-							String room = message.getString("room");
-							String[] parts = room.split("/");
-							if (parts.length == 3 && parts[0].equals(project) && parts[1].equals(env)) {
-								String eventName = parts[2];
-								List<RealTimeEventListener> listeners = roomListeners.get(room);
-								if (listeners.size() > 0) {
-									Map<String, String> params = new HashMap<String, String>();
-									@SuppressWarnings("unchecked")
-									Iterator<String> iter = (Iterator<String>) message.keys();
-									while (iter.hasNext()) {
-										String key = iter.next();
-										if (key.length() > 0 && key.charAt(0) == '_') {
-											String value = message.getString(key);
-											if (value != null) {
-												params.put(key.substring(1), value);
+							if (args.length() > 0 && args.getJSONObject(0) != null) {
+								JSONObject message = args.getJSONObject(0);
+								String room = message.getString("room");
+								String[] parts = room.split("/");
+								if (parts.length == 3 && parts[0].equals(project) && parts[1].equals(env)) {
+									String eventName = parts[2];
+									List<RealTimeEventListener> listeners = roomListeners.get(room);
+									if (listeners.size() > 0) {
+										Map<String, String> params = new HashMap<String, String>();
+										@SuppressWarnings("unchecked")
+										Iterator<String> iter = (Iterator<String>) message.keys();
+										while (iter.hasNext()) {
+											String key = iter.next();
+											if (key.length() > 0 && key.charAt(0) == '_') {
+												String value = message.getString(key);
+												if (value != null) {
+													params.put(key.substring(1), value);
+												}
 											}
+										}
+										
+										for (RealTimeEventListener listener : listeners) {
+											listener.realTimeEventReceived(eventName, params);
 										}
 									}
 									
-									for (RealTimeEventListener listener : listeners) {
-										listener.realTimeEventReceived(eventName, params);
-									}
 								}
-								
 							}
 						} catch(JSONException e) {
 							// ignore, wrong message (i.e. not room)
 						}
-						
 					}
+				});
+				
+				client.setJSONCallback(new JSONCallback() {
+					
+					@Override
+					public void onJSON(JSONObject message, Acknowledge acknowledge) {
+						// System.out.println("json: "+message);
+					}
+				});
+				
+				client.setStringCallback(new StringCallback() {
+					
+					@Override
+					public void onString(String string, Acknowledge acknowledge) {
+						// System.out.println("stirng "+string);
+					}
+				});
+				
+				for (String room : roomListeners.keySet()) {
+					TreeMap<String, Object> params = new TreeMap<String, Object>();
+					params.put("room", room);
+					client.emit("subscribe", socketioMessage(params));
 				}
-			});
-		} catch(Exception e) {
-			fireFailed(e);
-		}
+				
+				fireConnected();
+			}
+		}, new Handler());
 	}
 
 	protected static void setCurrentUser(BackbeamObject obj, String authCode) {
