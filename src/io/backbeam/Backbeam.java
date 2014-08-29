@@ -581,8 +581,7 @@ public class Backbeam {
 			if (value instanceof List<?>) {
 				@SuppressWarnings("unchecked")
 				List<String> list = (List<String>) value;
-				Collections.sort(list);
-				reqParams.put(key, new ArrayList<String>(list));
+				reqParams.put(key, list);
 			} else if (value instanceof InputStream) {
 				reqParams.put(key, (InputStream)value, key);
 			} else if (value instanceof File) {
@@ -616,8 +615,9 @@ public class Backbeam {
 			if (value instanceof List<?>) {
 				@SuppressWarnings("unchecked")
 				List<String> list = (List<String>) value;
-				Collections.sort(list);
-				for (String string : list) {
+				List<String> copy = new ArrayList<String>(list);
+				Collections.sort(copy);
+				for (String string : copy) {
 					cacheKeyString.append("&"+key+"="+string);
 				}
 			} else if (value instanceof InputStream || value instanceof File) {
@@ -637,8 +637,9 @@ public class Backbeam {
 			if (value instanceof List<?>) {
 				@SuppressWarnings("unchecked")
 				List<String> list = (List<String>) value;
-				Collections.sort(list);
-				for (String string : list) {
+				List<String> copy = new ArrayList<String>(list);
+				Collections.sort(copy);
+				for (String string : copy) {
 					parameterString.append("&"+key+"="+string);
 				}
 			} else if (value instanceof FileUpload) {
