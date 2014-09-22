@@ -916,14 +916,17 @@ public class Backbeam {
 		}
 	}
 	
-	private static boolean subscriptionToChannels(String path, final OperationCallback callback, String... channels) {
+	private static boolean subscriptionToChannels(String path, final OperationCallback callback, String[] channels) {
 		String registrationId = instance().registrationId;
+		registrationId = "foo";
 		if (registrationId == null) return false;
 		
 		TreeMap<String, Object> params = new TreeMap<String, Object>();
 		params.put("gateway", "gcm");
 		params.put("token", registrationId);
-		params.put("channels", Arrays.asList(channels));
+		if (channels != null) {
+			params.put("channels", Arrays.asList(channels));
+		}
 		instance().perform("POST", path, params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
 			public void success(Json json, boolean fromCache) {
 				if (!json.isMap()) {
@@ -955,6 +958,50 @@ public class Backbeam {
 	
 	public static boolean unsubscribeFromChannels(final OperationCallback callback, String... channels) {
 		return subscriptionToChannels("/push/unsubscribe", callback, channels);
+	}
+	
+	public static boolean unsubscribeFromAllChannels(final OperationCallback callback) {
+		return subscriptionToChannels("/push/unsubscribe-all", callback, null);
+	}
+	
+	public static boolean subscribedChannels(final ListCallback callback) {
+		String registrationId = instance().registrationId;
+		registrationId = "foo";
+		if (registrationId == null) return false;
+		
+		TreeMap<String, Object> params = new TreeMap<String, Object>();
+		params.put("gateway", "gcm");
+		params.put("token", registrationId);
+		instance().perform("GET", "/push/subscribed-channels", params, FetchPolicy.REMOTE_ONLY, new RequestCallback() {
+			public void success(Json json, boolean fromCache) {
+				if (!json.isMap()) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				String status = json.get("status").asString();
+				if (status == null) {
+					callback.failure(new BackbeamException("InvalidResponse"));
+					return;
+				}
+				if (!status.equals("Success")) {
+					callback.failure(new BackbeamException(status));
+					return;
+				}
+				List<String> list = new ArrayList<String>();
+				for (Json channel : json.get("channels")) {
+					String c = channel.asString();
+					if (c != null) {
+						list.add(c);
+					}
+				}
+				callback.success(list);
+			}
+			@Override
+			public void failure(BackbeamException exception) {
+				callback.failure(exception);
+			}
+		});
+		return true;
 	}
 	
 	public static void sendPushNotificationToChannel(PushNotification notification, String channel, final OperationCallback callback) {
