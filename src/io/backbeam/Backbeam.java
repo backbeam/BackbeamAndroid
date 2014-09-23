@@ -1,5 +1,6 @@
 package io.backbeam;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -13,6 +14,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -789,8 +791,10 @@ public class Backbeam {
 		// System.out.println("url = "+url);
 		AsyncHttpClient client = new AsyncHttpClient();
 		AsyncHttpResponseHandler handler = new AsyncHttpResponseHandler() {
-		    @Override
-		    public void onSuccess(String json) {
+			
+			@Override
+			public void onSuccess(int statusCode, Header[] headers, byte[] responseBody) {
+				String json = new String(responseBody, Charset.forName("UTF-8"));
 		    	
 				if (oldRegistrationIds.size() > 0) {
 					oldRegistrationIds = Json.list();
@@ -813,8 +817,9 @@ public class Backbeam {
 		    }
 		    
 		    @Override
-		    public void onFailure(Throwable error, String bodyString) {
+		    public void onFailure(int statusCode, Header[] headers, byte[] responseBody, Throwable error) {
 				try {
+					String bodyString = new String(responseBody, Charset.forName("UTF-8"));
 					Json json = Json.loads(bodyString);
 					Json status = json.get("status");
 					if (status != null) {
