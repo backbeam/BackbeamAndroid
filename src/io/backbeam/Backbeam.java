@@ -920,7 +920,6 @@ public class Backbeam {
 	
 	private static boolean subscriptionToChannels(String path, final OperationCallback callback, String[] channels) {
 		String registrationId = instance().registrationId;
-		registrationId = "foo";
 		if (registrationId == null) return false;
 		
 		TreeMap<String, Object> params = new TreeMap<String, Object>();
@@ -968,7 +967,6 @@ public class Backbeam {
 	
 	public static boolean subscribedChannels(final ListCallback callback) {
 		String registrationId = instance().registrationId;
-		registrationId = "foo";
 		if (registrationId == null) return false;
 		
 		TreeMap<String, Object> params = new TreeMap<String, Object>();
