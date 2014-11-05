@@ -440,7 +440,7 @@ public class Backbeam {
 				try {
 					FileInputStream fis = instance().context.openFileInput(USER_FILE);
 					ObjectInputStream ois = new ObjectInputStream(fis);
-					Object object = (BackbeamObject) ois.readObject();
+					Object object = ois.readObject();
 					if (object instanceof BackbeamObject) { // compatibility with old SDK versions
 						instance().currentUser = (BackbeamObject) object;
 					} else if (object instanceof HashMap) {
